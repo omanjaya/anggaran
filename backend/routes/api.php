@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\SkpdController;
 use App\Http\Controllers\Api\AccountCodeController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\PlgkController;
+use App\Http\Controllers\Api\DpaImportController;
 use Illuminate\Support\Facades\Route;
 
 // Public routes
@@ -137,6 +138,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/plgk', [ImportController::class, 'importPlgk']);
         Route::post('/preview', [ImportController::class, 'preview']);
         Route::get('/templates', [ImportController::class, 'downloadTemplate']);
+        // DPA PDF Import
+        Route::post('/dpa-pdf/preview', [DpaImportController::class, 'preview']);
+        Route::post('/dpa-pdf', [DpaImportController::class, 'import']);
+        Route::post('/dpa-pdf/batch', [DpaImportController::class, 'importBatch']);
     });
 
     // SKPD Management

@@ -139,6 +139,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/import/DataImportView.vue'),
         meta: { permission: 'master.manage' },
       },
+      {
+        path: 'import/dpa-pdf',
+        name: 'dpa-pdf-import',
+        component: () => import('@/views/import/DpaPdfImportView.vue'),
+        meta: { permission: 'master.manage' },
+      },
       // Settings - SKPD Management
       {
         path: 'settings/skpd',

@@ -110,7 +110,8 @@ const menuOptions = computed<MenuOption[]>(() => {
       key: 'settings',
       icon: renderIcon(SettingsOutline),
       children: [
-        { label: 'Import Data', key: 'data-import' },
+        { label: 'Import Excel', key: 'data-import' },
+        { label: 'Import DPA PDF', key: 'dpa-pdf-import' },
         { label: 'Manajemen SKPD', key: 'skpd-management' },
         { label: 'Audit Log', key: 'audit-log' },
       ],
