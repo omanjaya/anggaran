@@ -6,9 +6,11 @@ use App\Models\Program;
 use App\Models\Activity;
 use App\Models\SubActivity;
 use App\Models\BudgetItem;
+use App\Models\BudgetItemDetail;
 use App\Models\MonthlyPlan;
 use App\Models\Skpd;
 use App\Models\AccountCode;
+use App\Models\ActivityIndicator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -36,22 +38,25 @@ class DpaImportService
             // 1. Create or find SKPD
             $skpd = $this->importSkpd($data['header']);
 
-            // 2. Create or find Program
+            // 2. Create or find Program (with urusan fields)
             $program = $this->importProgram($data['header'], $skpd);
 
             // 3. Create or find Activity
             $activity = $this->importActivity($data['header'], $program);
 
-            // 4. Create or find Sub Activity
+            // 4. Create or find Sub Activity (with additional fields)
             $subActivity = $this->importSubActivity($data, $activity);
 
-            // 5. Import Budget Items
+            // 5. Import Indicators
+            $this->importIndicators($data['indicators'], $subActivity);
+
+            // 6. Import Budget Items (with details)
             $budgetItems = $this->importBudgetItems($data['budget_items'], $subActivity);
 
-            // 6. Import Monthly Plans
+            // 7. Import Monthly Plans
             $this->importMonthlyPlans($data['monthly_plan'], $budgetItems, $data['header']['tahun_anggaran']);
 
-            // 7. Import Account Codes
+            // 8. Import Account Codes
             $this->importAccountCodes($data['budget_items']);
 
             // Update totals
@@ -127,12 +132,26 @@ class DpaImportService
             [
                 'skpd_id' => $skpd->id,
                 'name' => $header['program']['name'],
+                'urusan_pemerintahan_code' => $header['urusan_pemerintahan']['code'] ?? null,
+                'urusan_pemerintahan_name' => $header['urusan_pemerintahan']['name'] ?? null,
+                'bidang_urusan_code' => $header['bidang_urusan']['code'] ?? null,
+                'bidang_urusan_name' => $header['bidang_urusan']['name'] ?? null,
                 'category' => $category,
                 'fiscal_year' => $header['tahun_anggaran'] ?? date('Y'),
                 'total_budget' => 0,
                 'is_active' => true,
             ]
         );
+
+        // Update urusan fields if program already exists
+        if (!$program->wasRecentlyCreated) {
+            $program->update([
+                'urusan_pemerintahan_code' => $header['urusan_pemerintahan']['code'] ?? $program->urusan_pemerintahan_code,
+                'urusan_pemerintahan_name' => $header['urusan_pemerintahan']['name'] ?? $program->urusan_pemerintahan_name,
+                'bidang_urusan_code' => $header['bidang_urusan']['code'] ?? $program->bidang_urusan_code,
+                'bidang_urusan_name' => $header['bidang_urusan']['name'] ?? $program->bidang_urusan_name,
+            ]);
+        }
 
         $this->importLog[] = [
             'type' => 'info',
@@ -177,16 +196,30 @@ class DpaImportService
                 'code' => $subActivityData['code'],
             ],
             [
+                'nomor_dpa' => $header['nomor_dpa'] ?? null,
                 'name' => $subActivityData['name'],
                 'total_budget' => $header['alokasi_tahun'] ?? 0,
+                'sumber_pendanaan' => $subActivityData['sumber_pendanaan'] ?? null,
+                'lokasi' => $subActivityData['lokasi'] ?? null,
+                'keluaran' => $subActivityData['keluaran'] ?? null,
+                'waktu_pelaksanaan' => $subActivityData['waktu_pelaksanaan'] ?? null,
+                'alokasi_tahun_minus_1' => $header['alokasi_tahun_minus_1'] ?? 0,
+                'alokasi_tahun_plus_1' => $header['alokasi_tahun_plus_1'] ?? 0,
                 'is_active' => true,
             ]
         );
 
-        // Update total budget if exists
+        // Update fields if exists
         if (!$subActivity->wasRecentlyCreated) {
             $subActivity->update([
+                'nomor_dpa' => $header['nomor_dpa'] ?? $subActivity->nomor_dpa,
                 'total_budget' => $header['alokasi_tahun'] ?? $subActivity->total_budget,
+                'sumber_pendanaan' => $subActivityData['sumber_pendanaan'] ?? $subActivity->sumber_pendanaan,
+                'lokasi' => $subActivityData['lokasi'] ?? $subActivity->lokasi,
+                'keluaran' => $subActivityData['keluaran'] ?? $subActivity->keluaran,
+                'waktu_pelaksanaan' => $subActivityData['waktu_pelaksanaan'] ?? $subActivity->waktu_pelaksanaan,
+                'alokasi_tahun_minus_1' => $header['alokasi_tahun_minus_1'] ?? $subActivity->alokasi_tahun_minus_1,
+                'alokasi_tahun_plus_1' => $header['alokasi_tahun_plus_1'] ?? $subActivity->alokasi_tahun_plus_1,
             ]);
         }
 
@@ -197,6 +230,36 @@ class DpaImportService
         ];
 
         return $subActivity;
+    }
+
+    protected function importIndicators(array $indicators, SubActivity $subActivity): void
+    {
+        $indicatorTypes = ['capaian_kegiatan', 'masukan', 'keluaran', 'hasil'];
+
+        foreach ($indicatorTypes as $type) {
+            if (empty($indicators[$type]['tolak_ukur']) && empty($indicators[$type]['target'])) {
+                continue;
+            }
+
+            ActivityIndicator::updateOrCreate(
+                [
+                    'sub_activity_id' => $subActivity->id,
+                    'type' => $type,
+                ],
+                [
+                    'tolak_ukur' => $indicators[$type]['tolak_ukur'] ?? null,
+                    'target' => is_numeric($indicators[$type]['target'])
+                        ? number_format($indicators[$type]['target'], 0, ',', '.')
+                        : ($indicators[$type]['target'] ?? null),
+                ]
+            );
+        }
+
+        $this->importLog[] = [
+            'type' => 'info',
+            'message' => 'Indikator diimport',
+            'details' => 'Sub Kegiatan: ' . $subActivity->code,
+        ];
     }
 
     protected function importBudgetItems(array $items, SubActivity $subActivity): array
@@ -240,6 +303,11 @@ class DpaImportService
                 ]
             );
 
+            // Import budget item details
+            if (!empty($details)) {
+                $this->importBudgetItemDetails($details, $budgetItem);
+            }
+
             $budgetItems[] = $budgetItem;
 
             $this->importLog[] = [
@@ -250,6 +318,29 @@ class DpaImportService
         }
 
         return $budgetItems;
+    }
+
+    protected function importBudgetItemDetails(array $details, BudgetItem $budgetItem): void
+    {
+        // Delete existing details to avoid duplicates
+        $budgetItem->details()->delete();
+
+        foreach ($details as $detail) {
+            BudgetItemDetail::create([
+                'budget_item_id' => $budgetItem->id,
+                'description' => $detail['description'] ?? '',
+                'volume' => $detail['volume'] ?? 0,
+                'unit' => $detail['unit'] ?? null,
+                'unit_price' => $detail['unit_price'] ?? 0,
+                'amount' => $detail['amount'] ?? 0,
+            ]);
+        }
+
+        $this->importLog[] = [
+            'type' => 'info',
+            'message' => 'Detail rincian diimport',
+            'details' => $budgetItem->code . ' (' . count($details) . ' item)',
+        ];
     }
 
     protected function importMonthlyPlans(array $monthlyPlan, array $budgetItems, ?int $year): void

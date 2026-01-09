@@ -13,11 +13,16 @@ class Program extends Model
 
     protected $fillable = [
         'code',
+        'urusan_pemerintahan_code',
+        'urusan_pemerintahan_name',
+        'bidang_urusan_code',
+        'bidang_urusan_name',
         'name',
         'category',
         'fiscal_year',
         'total_budget',
         'is_active',
+        'skpd_id',
     ];
 
     protected function casts(): array
