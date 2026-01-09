@@ -1406,7 +1406,7 @@ onUnmounted(() => {
 }
 
 .realization-grid th {
-  padding: 8px 10px;
+  padding: 10px 12px;
   text-align: center;
   font-weight: 600;
   border: 1px solid rgba(255,255,255,0.2);
@@ -1414,7 +1414,7 @@ onUnmounted(() => {
 }
 
 .realization-grid td {
-  padding: 5px 6px;
+  padding: 6px 8px;
   border: 1px solid #e5e7eb;
   vertical-align: middle;
 }
@@ -1643,8 +1643,8 @@ onUnmounted(() => {
 }
 
 .realization-grid .col-input {
-  width: 80px;
-  padding: 4px 5px;
+  width: 85px;
+  padding: 4px 6px;
   text-align: right;
   font-size: 13px;
 }
@@ -1673,7 +1673,7 @@ onUnmounted(() => {
 .realization-grid .col-input :deep(.n-input__input-el) {
   text-align: right;
   font-size: 13px;
-  padding: 4px 5px;
+  padding: 4px 6px;
 }
 
 /* Row states */
