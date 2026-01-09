@@ -203,9 +203,11 @@ class DpaPdfParserService
     {
         $items = [];
         $textBlock = implode("\n", $this->lines);
+        $seenCodes = [];
 
-        // Pattern for budget item codes like 5.1.02.01.001.00024
-        $pattern = '/(5\.\d+\.\d+\.\d+\.\d+(?:\.\d+)?)\s+(.+?)\s+Rp([\d.,]+)/';
+        // Pattern for budget item codes - handles both with and without space/tab
+        // Matches: 5.1.02.01.001 Description Rp1.000 OR 5.1.02.01.001.00024Description Rp1.000
+        $pattern = '/(5\.\d+\.\d+\.\d+\.\d+(?:\.\d+)?)[\s\t]*([A-Za-z].+?)\s+Rp([\d.,]+)/';
 
         if (preg_match_all($pattern, $textBlock, $matches, PREG_SET_ORDER)) {
             foreach ($matches as $match) {
@@ -213,17 +215,27 @@ class DpaPdfParserService
                 $description = trim($match[2]);
                 $amount = $this->parseAmount($match[3]);
 
-                // Skip parent/header items (usually have bigger amounts and are summaries)
+                // Skip if we've already seen this exact code+amount combo (avoid duplicates)
+                $key = $code . '_' . $amount;
+                if (isset($seenCodes[$key])) {
+                    continue;
+                }
+                $seenCodes[$key] = true;
+
+                // Determine if this is a parent (shorter code) or child (longer code with .00xxx)
+                $isChild = preg_match('/\.\d{5}$/', $code);
+
                 $items[] = [
                     'code' => $code,
                     'description' => $description,
                     'amount' => $amount,
+                    'is_child' => $isChild,
                     'details' => [],
                 ];
             }
         }
 
-        // Parse detailed items with specifications
+        // Parse detailed items with specifications (Spesifikasi line items)
         $detailPattern = '/Spesifikasi:\s*(.+?)\s+(\d+[\d.,]*)\s*(\w+)\s+(\w+)\s+Rp([\d.,]+)\s+\d+%\s+Rp([\d.,]+)/';
 
         if (preg_match_all($detailPattern, $textBlock, $matches, PREG_SET_ORDER)) {
@@ -246,17 +258,17 @@ class DpaPdfParserService
     protected function consolidateBudgetItems(array $items): array
     {
         $consolidated = [];
-        $currentParent = null;
+        $currentParentIndex = null;
 
         foreach ($items as $item) {
             if (!empty($item['code']) && !($item['is_detail'] ?? false)) {
-                $currentParent = $item;
-                $currentParent['details'] = [];
-                $consolidated[] = &$currentParent;
-            } elseif ($item['is_detail'] ?? false) {
-                if ($currentParent !== null) {
-                    $currentParent['details'][] = $item;
-                }
+                // Add new budget item
+                $item['details'] = [];
+                $consolidated[] = $item;
+                $currentParentIndex = count($consolidated) - 1;
+            } elseif (($item['is_detail'] ?? false) && $currentParentIndex !== null) {
+                // Add detail to current parent
+                $consolidated[$currentParentIndex]['details'][] = $item;
             }
         }
 
