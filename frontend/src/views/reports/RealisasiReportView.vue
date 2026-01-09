@@ -71,7 +71,7 @@ const yearOptions = computed(() => {
 })
 
 // Month options
-const monthOptions = [
+const monthOptions: Array<{ value: number | null; label: string }> = [
   { value: null, label: 'Semua Bulan' },
   { value: 1, label: 'Januari' },
   { value: 2, label: 'Februari' },
@@ -315,7 +315,7 @@ onMounted(() => {
           <label class="block text-sm font-medium text-gray-700 mb-1">Bulan</label>
           <NSelect
             v-model:value="selectedMonth"
-            :options="monthOptions"
+            :options="monthOptions as any"
             size="large"
           />
         </div>

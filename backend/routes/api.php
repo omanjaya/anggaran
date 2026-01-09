@@ -74,6 +74,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Monthly Plans
     Route::get('/monthly-plans/by-budget-item/{budgetItemId}', [MonthlyPlanController::class, 'byBudgetItem']);
+    Route::post('/monthly-plans/batch', [MonthlyPlanController::class, 'batch']);
     Route::apiResource('monthly-plans', MonthlyPlanController::class);
 
     // Realizations

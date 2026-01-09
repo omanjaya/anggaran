@@ -142,4 +142,66 @@ class MonthlyPlanController extends Controller
             'data' => $plans,
         ]);
     }
+
+    /**
+     * Batch create/update monthly plans
+     */
+    public function batch(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'plans' => 'required|array|min:1',
+            'plans.*.budget_item_id' => 'required|exists:budget_items,id',
+            'plans.*.month' => 'required|integer|min:1|max:12',
+            'plans.*.year' => 'required|integer|min:2020|max:2100',
+            'plans.*.planned_volume' => 'required|numeric|min:0',
+            'plans.*.planned_amount' => 'required|numeric|min:0',
+            'plans.*.id' => 'nullable|integer|exists:monthly_plans,id',
+        ]);
+
+        $savedCount = 0;
+        $errors = [];
+
+        foreach ($validated['plans'] as $planData) {
+            try {
+                // Check if we're updating or creating
+                $existingPlan = MonthlyPlan::where('budget_item_id', $planData['budget_item_id'])
+                    ->where('month', $planData['month'])
+                    ->where('year', $planData['year'])
+                    ->first();
+
+                if ($existingPlan) {
+                    // Check if has realization
+                    if ($existingPlan->realization()->exists()) {
+                        $errors[] = "Bulan {$planData['month']} sudah memiliki realisasi";
+                        continue;
+                    }
+
+                    $existingPlan->update([
+                        'planned_volume' => $planData['planned_volume'],
+                        'planned_amount' => $planData['planned_amount'],
+                    ]);
+                } else {
+                    MonthlyPlan::create([
+                        'budget_item_id' => $planData['budget_item_id'],
+                        'month' => $planData['month'],
+                        'year' => $planData['year'],
+                        'planned_volume' => $planData['planned_volume'],
+                        'planned_amount' => $planData['planned_amount'],
+                        'created_by' => auth()->id(),
+                    ]);
+                }
+
+                $savedCount++;
+            } catch (\Exception $e) {
+                $errors[] = "Error pada item {$planData['budget_item_id']}: " . $e->getMessage();
+            }
+        }
+
+        return response()->json([
+            'success' => count($errors) === 0,
+            'message' => "{$savedCount} rencana berhasil disimpan",
+            'saved_count' => $savedCount,
+            'errors' => $errors,
+        ]);
+    }
 }

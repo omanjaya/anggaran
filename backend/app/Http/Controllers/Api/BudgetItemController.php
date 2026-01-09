@@ -30,12 +30,42 @@ class BudgetItemController extends Controller
             $query->where('is_active', $request->boolean('is_active'));
         }
 
+        // Include monthly plans if requested
+        $withMonthlyPlans = $request->boolean('with_monthly_plans');
+        $year = $request->get('year', date('Y'));
+
+        if ($withMonthlyPlans) {
+            $query->with(['monthlyPlans' => function ($q) use ($year) {
+                $q->where('year', $year);
+            }]);
+        }
+
         $budgetItems = $query->orderBy('code')
             ->paginate($request->get('per_page', 15));
 
+        // Transform data to include monthly_plans indexed by month
+        $items = collect($budgetItems->items())->map(function ($item) use ($withMonthlyPlans) {
+            $itemArray = $item->toArray();
+
+            if ($withMonthlyPlans && isset($itemArray['monthly_plans'])) {
+                // Index monthly plans by month number for easy access
+                $monthlyPlansIndexed = [];
+                foreach ($itemArray['monthly_plans'] as $plan) {
+                    $monthlyPlansIndexed[$plan['month']] = [
+                        'id' => $plan['id'],
+                        'planned_volume' => $plan['planned_volume'],
+                        'planned_amount' => $plan['planned_amount'],
+                    ];
+                }
+                $itemArray['monthly_plans'] = $monthlyPlansIndexed;
+            }
+
+            return $itemArray;
+        });
+
         return response()->json([
             'success' => true,
-            'data' => $budgetItems->items(),
+            'data' => $items,
             'meta' => [
                 'current_page' => $budgetItems->currentPage(),
                 'last_page' => $budgetItems->lastPage(),

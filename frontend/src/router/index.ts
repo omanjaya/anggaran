@@ -59,7 +59,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'planning/monthly',
         name: 'monthly-planning',
-        component: () => import('@/views/planning/MonthlyPlanningView.vue'),
+        component: () => import('@/views/planning/MonthlyPlanningGridView.vue'),
         meta: { permission: 'planning.view' },
       },
       {
