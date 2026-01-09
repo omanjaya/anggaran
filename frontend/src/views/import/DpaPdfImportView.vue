@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { h, ref, computed } from 'vue'
+import { ref, computed } from 'vue'
 import {
   NButton,
   NUpload,
@@ -23,9 +23,6 @@ import type { DataTableColumns, UploadFileInfo } from 'naive-ui'
 import {
   CloudUploadOutline,
   DocumentOutline,
-  CloseOutline,
-  CheckmarkCircleOutline,
-  AlertCircleOutline,
   TrashOutline,
   EyeOutline,
 } from '@vicons/ionicons5'
@@ -186,16 +183,16 @@ const budgetItemColumns: DataTableColumns<{ code: string; description: string; a
   },
 ]
 
-function getStatusTag(status: FileItem['status']) {
-  const config: Record<string, { type: 'default' | 'info' | 'success' | 'error' | 'warning'; label: string }> = {
-    pending: { type: 'default', label: 'Menunggu' },
-    previewing: { type: 'info', label: 'Membaca...' },
-    previewed: { type: 'warning', label: 'Siap Import' },
-    importing: { type: 'info', label: 'Importing...' },
-    success: { type: 'success', label: 'Berhasil' },
-    error: { type: 'error', label: 'Gagal' },
+function getStatusTag(status: FileItem['status']): { type: 'default' | 'info' | 'success' | 'error' | 'warning'; label: string } {
+  const config = {
+    pending: { type: 'default' as const, label: 'Menunggu' },
+    previewing: { type: 'info' as const, label: 'Membaca...' },
+    previewed: { type: 'warning' as const, label: 'Siap Import' },
+    importing: { type: 'info' as const, label: 'Importing...' },
+    success: { type: 'success' as const, label: 'Berhasil' },
+    error: { type: 'error' as const, label: 'Gagal' },
   }
-  return config[status] || config.pending
+  return config[status]
 }
 </script>
 
