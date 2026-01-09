@@ -1,0 +1,5 @@
+export { default as FormInput } from './FormInput.vue'
+export { default as FormSelect } from './FormSelect.vue'
+export { default as FormDatePicker } from './FormDatePicker.vue'
+export { default as FormInputNumber } from './FormInputNumber.vue'
+export { default as FormCheckbox } from './FormCheckbox.vue'
