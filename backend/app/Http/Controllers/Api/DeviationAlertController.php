@@ -95,8 +95,8 @@ class DeviationAlertController extends Controller
         $alertsCreated = 0;
         $currentDate = now();
 
-        // Get all monthly plans
-        $monthlyPlans = MonthlyPlan::with(['budgetItem.subActivity'])
+        // Get all monthly plans with their realizations
+        $monthlyPlans = MonthlyPlan::with(['budgetItem.subActivity', 'realization'])
             ->where('year', $year)
             ->get();
 
@@ -106,14 +106,13 @@ class DeviationAlertController extends Controller
                 continue;
             }
 
-            // Get realization for this plan
-            $realization = MonthlyRealization::where([
-                'budget_item_id' => $plan->budget_item_id,
-                'month' => $plan->month,
-                'year' => $plan->year,
-            ])->where('status', 'APPROVED')->first();
+            // Get realization for this plan (via relationship)
+            $realization = $plan->realization;
 
-            // Check if month has passed and no realization
+            // Only check approved realizations for deviation
+            $approvedRealization = $realization && $realization->status?->value === 'APPROVED' ? $realization : null;
+
+            // Check if month has passed and no realization at all
             if ($plan->month < $month && !$realization) {
                 $this->createAlert($plan, null, 'NOT_REALIZED', 'HIGH',
                     "Item belanja '{$plan->budgetItem->name}' bulan " . $this->getMonthName($plan->month) . " belum direalisasi.");
@@ -121,8 +120,11 @@ class DeviationAlertController extends Controller
                 continue;
             }
 
+            // Check deviation for any realization (not just approved, for early warning)
             if ($realization) {
-                $deviationPercentage = (($realization->realized_amount - $plan->planned_amount) / $plan->planned_amount) * 100;
+                $deviationPercentage = $plan->planned_amount > 0
+                    ? (($realization->realized_amount - $plan->planned_amount) / $plan->planned_amount) * 100
+                    : 0;
 
                 // Under realization (< 70%)
                 if ($deviationPercentage < -30) {
@@ -210,6 +212,28 @@ class DeviationAlertController extends Controller
             'success' => true,
             'message' => 'Alert berhasil diselesaikan.',
             'data' => $alert->load(['resolvedBy']),
+        ]);
+    }
+
+    public function dismiss(int $id): JsonResponse
+    {
+        $alert = DeviationAlert::findOrFail($id);
+
+        if ($alert->status === 'RESOLVED' || $alert->status === 'DISMISSED') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Alert sudah diproses sebelumnya.',
+            ], 422);
+        }
+
+        $alert->update([
+            'status' => 'DISMISSED',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Alert berhasil diabaikan.',
+            'data' => $alert,
         ]);
     }
 

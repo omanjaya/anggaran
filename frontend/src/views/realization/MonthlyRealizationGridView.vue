@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import {
   NCard, NSelect, NSpin, NEmpty, NButton, NIcon, NInputNumber, NSpace, NTag, NTooltip, NProgress, NGrid, NGridItem
 } from 'naive-ui'
-import { SaveOutline, RefreshOutline, CloseCircle, TrendingUpOutline, TrendingDownOutline, WalletOutline, CubeOutline } from '@vicons/ionicons5'
+import { SaveOutline, RefreshOutline, CloseCircle, TrendingUpOutline, TrendingDownOutline, WalletOutline, CubeOutline, CloudDoneOutline, CloudOfflineOutline, SyncOutline } from '@vicons/ionicons5'
 import { useFormat, useMessage } from '@/composables'
 import api from '@/services/api'
+
+// Auto-save status type
+type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'error'
 
 interface BudgetItemDetail {
   id: number
@@ -75,6 +78,13 @@ const selectedYear = ref(new Date().getFullYear())
 
 // Track changes for saving
 const changedItems = ref<Set<number>>(new Set())
+
+// Auto-save state
+const saveStatus = ref<SaveStatus>('idle')
+const saveError = ref<string>('')
+const autoSaveDelay = 2000 // 2 seconds debounce
+let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
+const lastSavedAt = ref<Date | null>(null)
 
 // Months
 const months = [
@@ -443,57 +453,56 @@ function onVolumeChange(item: BudgetItem, month: number, volume: number | null) 
   item.monthly_realizations[month].realized_amount = newAmount
 
   changedItems.value.add(item.id)
+
+  // Trigger auto-save
+  triggerAutoSave()
 }
 
-function onAmountChange(item: BudgetItem, month: number, amount: number | null) {
-  if (!item.monthly_realizations) {
-    item.monthly_realizations = {}
+// ============ AUTO-SAVE FUNCTIONS ============
+
+// Trigger auto-save with debounce
+function triggerAutoSave() {
+  // Clear existing timer
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer)
   }
 
-  if (!item.monthly_realizations[month]) {
-    item.monthly_realizations[month] = { realized_volume: 0, realized_amount: 0 }
+  // Set status to pending
+  saveStatus.value = 'pending'
+  saveError.value = ''
+
+  // Set new timer
+  autoSaveTimer = setTimeout(() => {
+    saveAllRealizations(true) // true = auto-save mode (silent)
+  }, autoSaveDelay)
+}
+
+// Cancel pending auto-save
+function cancelAutoSave() {
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer)
+    autoSaveTimer = null
   }
-
-  let newAmount = amount || 0
-
-  // Validate against max allowed budget first
-  const maxBudget = getMaxAmountForMonth(item, month)
-  if (newAmount > maxBudget) {
-    newAmount = maxBudget
-    message.warning(`Anggaran maksimal untuk bulan ini adalah ${formatCurrency(maxBudget)}`)
-  }
-
-  // Calculate volume from amount
-  let newVolume = 0
-  if (item.unit_price > 0) {
-    newVolume = newAmount / Number(item.unit_price)
-  }
-
-  // Also validate against max allowed volume
-  const maxVolume = getMaxVolumeForMonth(item, month)
-  if (newVolume > maxVolume) {
-    newVolume = maxVolume
-    newAmount = maxVolume * Number(item.unit_price)
-    message.warning(`Volume maksimal untuk bulan ini adalah ${maxVolume.toFixed(2)}`)
-  }
-
-  item.monthly_realizations[month].realized_amount = newAmount
-  item.monthly_realizations[month].realized_volume = newVolume
-
-  changedItems.value.add(item.id)
 }
 
 // ============ SAVE FUNCTIONS ============
 
-async function saveAllRealizations() {
+async function saveAllRealizations(isAutoSave = false) {
   if (changedItems.value.size === 0) {
-    message.info('Tidak ada perubahan untuk disimpan')
+    if (!isAutoSave) {
+      message.info('Tidak ada perubahan untuk disimpan')
+    }
+    saveStatus.value = 'idle'
     return
   }
 
   saving.value = true
+  saveStatus.value = 'saving'
+  saveError.value = ''
+
   try {
     const realizationsToSave: any[] = []
+    const skippedMonths: string[] = []
 
     for (const itemId of changedItems.value) {
       const item = budgetItems.value.find(i => i.id === itemId)
@@ -503,28 +512,95 @@ async function saveAllRealizations() {
         const month = parseInt(monthStr)
         // Find the corresponding monthly plan
         const plan = item.monthly_plans?.[month]
-        if (!plan?.id) continue // Skip if no plan exists
 
-        if (real.realized_volume > 0 || real.realized_amount > 0) {
-          realizationsToSave.push({
-            monthly_plan_id: plan.id,
-            realized_volume: real.realized_volume,
-            realized_amount: real.realized_amount,
-            id: real.id // For updates
-          })
+        if (!plan?.id) {
+          // Track skipped months for user feedback
+          skippedMonths.push(`Bulan ${month} (item ${item.code}): Tidak ada rencana`)
+          continue
         }
+
+        // Include realizations even if values are 0 (to allow clearing)
+        realizationsToSave.push({
+          monthly_plan_id: plan.id,
+          realized_volume: Number(real.realized_volume) || 0,
+          realized_amount: Number(real.realized_amount) || 0,
+          id: real.id // For updates
+        })
       }
     }
 
-    if (realizationsToSave.length > 0) {
-      await api.post('/realizations/batch', { realizations: realizationsToSave })
-      message.success(`${realizationsToSave.length} realisasi berhasil disimpan`)
+    if (realizationsToSave.length === 0) {
+      if (!isAutoSave) {
+        message.warning('Tidak ada data yang valid untuk disimpan')
+        if (skippedMonths.length > 0) {
+          message.warning(`Dilewati: ${skippedMonths.join(', ')}`)
+        }
+      }
+      saveStatus.value = skippedMonths.length > 0 ? 'error' : 'idle'
+      saveError.value = skippedMonths.length > 0 ? 'Beberapa bulan tidak memiliki rencana' : ''
+      return
+    }
+
+    console.log('Saving realizations:', realizationsToSave)
+    const response = await api.post('/realizations/batch', { realizations: realizationsToSave })
+    console.log('Save response:', response.data)
+
+    if (response.data.success) {
+      saveStatus.value = 'saved'
+      lastSavedAt.value = new Date()
+
+      // Update IDs from response if provided (for newly created realizations)
+      if (response.data.data && Array.isArray(response.data.data)) {
+        for (const savedReal of response.data.data) {
+          // Find the item by matching monthly_plan_id
+          for (const item of budgetItems.value) {
+            if (!item.monthly_plans) continue
+            for (const [monthStr, plan] of Object.entries(item.monthly_plans)) {
+              const month = parseInt(monthStr)
+              if (plan.id === savedReal.monthly_plan_id && item.monthly_realizations?.[month]) {
+                item.monthly_realizations[month].id = savedReal.id
+                break
+              }
+            }
+          }
+        }
+      }
+
+      // Clear changed items WITHOUT refreshing data - keep local values
       changedItems.value.clear()
-      // Refresh data
-      await fetchBudgetItems()
+
+      if (!isAutoSave) {
+        message.success(`${response.data.saved_count} realisasi berhasil disimpan`)
+      }
+
+      // Reset status after 3 seconds
+      setTimeout(() => {
+        if (saveStatus.value === 'saved') {
+          saveStatus.value = 'idle'
+        }
+      }, 3000)
+    } else {
+      saveStatus.value = 'error'
+      saveError.value = response.data.message || 'Gagal menyimpan'
+      message.error(response.data.message || 'Gagal menyimpan sebagian data')
+      if (response.data.errors?.length > 0) {
+        response.data.errors.forEach((err: string) => message.warning(err))
+      }
     }
   } catch (err: any) {
-    message.error(err.response?.data?.message || 'Gagal menyimpan realisasi')
+    console.error('Save error:', err)
+    saveStatus.value = 'error'
+    const errorMsg = err.response?.data?.message || err.message || 'Gagal menyimpan realisasi'
+    saveError.value = errorMsg
+
+    if (!isAutoSave) {
+      message.error(errorMsg)
+    }
+
+    // If authentication error, suggest re-login
+    if (err.response?.status === 401) {
+      message.warning('Sesi Anda telah berakhir. Silakan login ulang.')
+    }
   } finally {
     saving.value = false
   }
@@ -696,6 +772,11 @@ watch([selectedYear], () => {
 onMounted(() => {
   fetchSubActivities()
 })
+
+onUnmounted(() => {
+  // Cancel any pending auto-save
+  cancelAutoSave()
+})
 </script>
 
 <template>
@@ -729,12 +810,53 @@ onMounted(() => {
             size="large"
           />
         </div>
-        <NSpace>
+        <NSpace align="center">
+          <!-- Auto-save Status Indicator -->
+          <div class="save-status-indicator">
+            <template v-if="saveStatus === 'pending'">
+              <NTag type="warning" size="small" round>
+                <template #icon>
+                  <NIcon><SyncOutline /></NIcon>
+                </template>
+                Menunggu...
+              </NTag>
+            </template>
+            <template v-else-if="saveStatus === 'saving'">
+              <NTag type="info" size="small" round>
+                <template #icon>
+                  <NIcon class="spinning"><SyncOutline /></NIcon>
+                </template>
+                Menyimpan...
+              </NTag>
+            </template>
+            <template v-else-if="saveStatus === 'saved'">
+              <NTag type="success" size="small" round>
+                <template #icon>
+                  <NIcon><CloudDoneOutline /></NIcon>
+                </template>
+                Tersimpan
+              </NTag>
+            </template>
+            <template v-else-if="saveStatus === 'error'">
+              <NTooltip>
+                <template #trigger>
+                  <NTag type="error" size="small" round>
+                    <template #icon>
+                      <NIcon><CloudOfflineOutline /></NIcon>
+                    </template>
+                    Gagal
+                  </NTag>
+                </template>
+                <span>{{ saveError }}</span>
+              </NTooltip>
+            </template>
+          </div>
+
           <NButton
             type="primary"
             :loading="saving"
             :disabled="changedItems.size === 0"
-            @click="saveAllRealizations"
+            @click="saveAllRealizations(false)"
           >
             <template #icon>
               <NIcon><SaveOutline /></NIcon>
@@ -1063,23 +1185,12 @@ onMounted(() => {
                     @update:value="(v) => onVolumeChange(item, month.value, v)"
                   />
                 </td>
-                <td class="col-input col-realisasi" :class="{ 'col-disabled': isCellDisabled(item, month.value) }">
-                  <NTooltip v-if="isCellDisabled(item, month.value)" placement="top">
-                    <template #trigger>
-                      <div class="disabled-cell">-</div>
-                    </template>
-                    <span>{{ getDisabledReason(item, month.value) }}</span>
-                  </NTooltip>
-                  <NInputNumber
-                    v-else
-                    :value="getMonthRealization(item, month.value).realized_amount || null"
-                    :min="0"
-                    :max="getMaxAmountForMonth(item, month.value)"
-                    size="small"
-                    placeholder="0"
-                    :show-button="false"
-                    @update:value="(v) => onAmountChange(item, month.value, v)"
-                  />
+                <!-- Amount column (auto-calculated, read-only) -->
+                <td class="col-input col-realisasi col-readonly" :class="{ 'col-disabled': isCellDisabled(item, month.value) }">
+                  <div v-if="isCellDisabled(item, month.value)" class="disabled-cell">-</div>
+                  <div v-else class="auto-calculated">
+                    {{ formatCurrency(getMonthRealization(item, month.value).realized_amount || 0) }}
+                  </div>
                 </td>
                 <template v-if="month.value > 1">
                   <td class="col-input col-realisasi col-ytd col-readonly">
@@ -1664,5 +1775,38 @@ onMounted(() => {
 
 .deviation-status {
   margin-top: 8px;
+}
+
+/* Auto-save status indicator */
+.save-status-indicator {
+  min-width: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* Spinning animation */
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Auto-calculated field */
+.auto-calculated {
+  font-size: 10px;
+  color: #059669;
+  font-weight: 500;
+  text-align: right;
+  padding: 2px 4px;
+  background: #ecfdf5;
+  border-radius: 3px;
 }
 </style>

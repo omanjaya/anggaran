@@ -158,6 +158,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/settings/AuditLogView.vue'),
         meta: { permission: 'master.manage' },
       },
+      {
+        path: 'settings/backup',
+        name: 'database-backup',
+        component: () => import('@/views/settings/DatabaseBackupView.vue'),
+        meta: { permission: 'master.manage' },
+      },
     ],
   },
   {

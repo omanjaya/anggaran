@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\AccountCodeController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\PlgkController;
 use App\Http\Controllers\Api\DpaImportController;
+use App\Http\Controllers\Api\DatabaseBackupController;
 use Illuminate\Support\Facades\Route;
 
 // Public routes
@@ -118,9 +119,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('deviation-alerts')->group(function () {
         Route::get('/', [DeviationAlertController::class, 'index']);
         Route::get('/dashboard', [DeviationAlertController::class, 'dashboard']);
-        Route::get('/check', [DeviationAlertController::class, 'check']);
+        Route::post('/check', [DeviationAlertController::class, 'check']);
         Route::post('/{id}/acknowledge', [DeviationAlertController::class, 'acknowledge']);
         Route::post('/{id}/resolve', [DeviationAlertController::class, 'resolve']);
+        Route::post('/{id}/dismiss', [DeviationAlertController::class, 'dismiss']);
         Route::delete('/{id}', [DeviationAlertController::class, 'destroy']);
     });
 
@@ -178,5 +180,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{subActivity}/preview', [PlgkController::class, 'preview']);
         Route::post('/{subActivity}/generate', [PlgkController::class, 'generate']);
         Route::get('/{subActivity}/validate', [PlgkController::class, 'validate']);
+    });
+
+    // Database Backup
+    Route::prefix('backups')->group(function () {
+        Route::get('/', [DatabaseBackupController::class, 'index']);
+        Route::get('/stats', [DatabaseBackupController::class, 'stats']);
+        Route::post('/create', [DatabaseBackupController::class, 'create']);
+        Route::post('/restore', [DatabaseBackupController::class, 'restore']);
+        Route::post('/restore/{filename}', [DatabaseBackupController::class, 'restoreFromFile']);
+        Route::get('/download/{filename}', [DatabaseBackupController::class, 'download']);
+        Route::delete('/{filename}', [DatabaseBackupController::class, 'destroy']);
     });
 });

@@ -160,6 +160,7 @@ class MonthlyPlanController extends Controller
 
         $savedCount = 0;
         $errors = [];
+        $savedPlans = [];
 
         foreach ($validated['plans'] as $planData) {
             try {
@@ -180,8 +181,14 @@ class MonthlyPlanController extends Controller
                         'planned_volume' => $planData['planned_volume'],
                         'planned_amount' => $planData['planned_amount'],
                     ]);
+
+                    $savedPlans[] = [
+                        'id' => $existingPlan->id,
+                        'budget_item_id' => $existingPlan->budget_item_id,
+                        'month' => $existingPlan->month,
+                    ];
                 } else {
-                    MonthlyPlan::create([
+                    $newPlan = MonthlyPlan::create([
                         'budget_item_id' => $planData['budget_item_id'],
                         'month' => $planData['month'],
                         'year' => $planData['year'],
@@ -189,6 +196,12 @@ class MonthlyPlanController extends Controller
                         'planned_amount' => $planData['planned_amount'],
                         'created_by' => auth()->id(),
                     ]);
+
+                    $savedPlans[] = [
+                        'id' => $newPlan->id,
+                        'budget_item_id' => $newPlan->budget_item_id,
+                        'month' => $newPlan->month,
+                    ];
                 }
 
                 $savedCount++;
@@ -202,6 +215,7 @@ class MonthlyPlanController extends Controller
             'message' => "{$savedCount} rencana berhasil disimpan",
             'saved_count' => $savedCount,
             'errors' => $errors,
+            'data' => $savedPlans,
         ]);
     }
 }

@@ -416,6 +416,7 @@ class RealizationController extends Controller
 
         $savedCount = 0;
         $errors = [];
+        $savedRealizations = [];
 
         foreach ($validated['realizations'] as $realData) {
             try {
@@ -454,8 +455,13 @@ class RealizationController extends Controller
                         'deviation_amount' => $deviationAmount,
                         'deviation_percentage' => $deviationPercentage,
                     ]);
+
+                    $savedRealizations[] = [
+                        'id' => $existingRealization->id,
+                        'monthly_plan_id' => $existingRealization->monthly_plan_id,
+                    ];
                 } else {
-                    MonthlyRealization::create([
+                    $newRealization = MonthlyRealization::create([
                         'monthly_plan_id' => $realData['monthly_plan_id'],
                         'realized_volume' => $realData['realized_volume'],
                         'realized_amount' => $realData['realized_amount'],
@@ -464,6 +470,11 @@ class RealizationController extends Controller
                         'deviation_percentage' => $deviationPercentage,
                         'status' => ApprovalStatus::DRAFT,
                     ]);
+
+                    $savedRealizations[] = [
+                        'id' => $newRealization->id,
+                        'monthly_plan_id' => $newRealization->monthly_plan_id,
+                    ];
                 }
 
                 $savedCount++;
@@ -477,6 +488,7 @@ class RealizationController extends Controller
             'message' => "{$savedCount} realisasi berhasil disimpan",
             'saved_count' => $savedCount,
             'errors' => $errors,
+            'data' => $savedRealizations,
         ]);
     }
 

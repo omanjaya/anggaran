@@ -10,6 +10,13 @@ class DeviationAlert extends Model
 {
     use HasFactory;
 
+    protected $appends = [
+        'alert_type_label',
+        'severity_label',
+        'status_label',
+        'month_name',
+    ];
+
     protected $fillable = [
         'monthly_realization_id',
         'budget_item_id',

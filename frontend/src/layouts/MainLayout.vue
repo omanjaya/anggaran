@@ -114,6 +114,7 @@ const menuOptions = computed<MenuOption[]>(() => {
         { label: 'Import DPA PDF', key: 'dpa-pdf-import' },
         { label: 'Manajemen SKPD', key: 'skpd-management' },
         { label: 'Audit Log', key: 'audit-log' },
+        { label: 'Backup Database', key: 'database-backup' },
       ],
     })
   }

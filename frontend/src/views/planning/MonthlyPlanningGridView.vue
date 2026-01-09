@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import {
   NCard, NSelect, NSpin, NEmpty, NButton, NIcon, NInputNumber, NSpace, NTag, NTooltip, NProgress
 } from 'naive-ui'
-import { SaveOutline, RefreshOutline, CloseCircle } from '@vicons/ionicons5'
+import { SaveOutline, RefreshOutline, CloseCircle, CloudDoneOutline, CloudOfflineOutline, SyncOutline } from '@vicons/ionicons5'
 import { useFormat, useMessage } from '@/composables'
 import api from '@/services/api'
+
+// Auto-save status type
+type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'error'
 
 interface BudgetItemDetail {
   id: number
@@ -66,6 +69,13 @@ const selectedYear = ref(new Date().getFullYear())
 
 // Track changes for saving
 const changedItems = ref<Set<number>>(new Set())
+
+// Auto-save state
+const saveStatus = ref<SaveStatus>('idle')
+const saveError = ref<string>('')
+const autoSaveDelay = 2000 // 2 seconds debounce
+let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
+const lastSavedAt = ref<Date | null>(null)
 
 // Months
 const months = [
@@ -387,6 +397,9 @@ function onVolumeChange(item: BudgetItem, month: number, volume: number | null) 
   item.monthly_plans[month].planned_amount = newAmount
 
   changedItems.value.add(item.id)
+
+  // Trigger auto-save
+  triggerAutoSave()
 }
 
 function onAmountChange(item: BudgetItem, month: number, amount: number | null) {
@@ -425,15 +438,49 @@ function onAmountChange(item: BudgetItem, month: number, amount: number | null) 
   item.monthly_plans[month].planned_volume = newVolume
 
   changedItems.value.add(item.id)
+
+  // Trigger auto-save
+  triggerAutoSave()
 }
 
-async function saveAllPlans() {
+// Trigger auto-save with debounce
+function triggerAutoSave() {
+  // Clear existing timer
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer)
+  }
+
+  // Set status to pending
+  saveStatus.value = 'pending'
+  saveError.value = ''
+
+  // Set new timer
+  autoSaveTimer = setTimeout(() => {
+    saveAllPlans(true) // true = auto-save mode (silent)
+  }, autoSaveDelay)
+}
+
+// Cancel pending auto-save
+function cancelAutoSave() {
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer)
+    autoSaveTimer = null
+  }
+}
+
+async function saveAllPlans(isAutoSave = false) {
   if (changedItems.value.size === 0) {
-    message.info('Tidak ada perubahan untuk disimpan')
+    if (!isAutoSave) {
+      message.info('Tidak ada perubahan untuk disimpan')
+    }
+    saveStatus.value = 'idle'
     return
   }
 
   saving.value = true
+  saveStatus.value = 'saving'
+  saveError.value = ''
+
   try {
     const plansToSave: any[] = []
 
@@ -443,28 +490,79 @@ async function saveAllPlans() {
 
       for (const [monthStr, plan] of Object.entries(item.monthly_plans)) {
         const month = parseInt(monthStr)
-        if (plan.planned_volume > 0 || plan.planned_amount > 0) {
-          plansToSave.push({
-            budget_item_id: item.id,
-            month,
-            year: selectedYear.value,
-            planned_volume: plan.planned_volume,
-            planned_amount: plan.planned_amount,
-            id: plan.id // For updates
-          })
-        }
+        // Include all plans with changes, even if values are 0
+        plansToSave.push({
+          budget_item_id: item.id,
+          month,
+          year: selectedYear.value,
+          planned_volume: Number(plan.planned_volume) || 0,
+          planned_amount: Number(plan.planned_amount) || 0,
+          id: plan.id // For updates
+        })
       }
     }
 
-    if (plansToSave.length > 0) {
-      await api.post('/monthly-plans/batch', { plans: plansToSave })
-      message.success(`${plansToSave.length} rencana berhasil disimpan`)
+    if (plansToSave.length === 0) {
+      if (!isAutoSave) {
+        message.warning('Tidak ada data yang valid untuk disimpan')
+      }
+      saveStatus.value = 'idle'
+      return
+    }
+
+    console.log('Saving plans:', plansToSave)
+    const response = await api.post('/monthly-plans/batch', { plans: plansToSave })
+    console.log('Save response:', response.data)
+
+    if (response.data.success) {
+      saveStatus.value = 'saved'
+      lastSavedAt.value = new Date()
+
+      // Update IDs from response if provided (for newly created plans)
+      if (response.data.data && Array.isArray(response.data.data)) {
+        for (const savedPlan of response.data.data) {
+          const item = budgetItems.value.find(i => i.id === savedPlan.budget_item_id)
+          if (item?.monthly_plans?.[savedPlan.month]) {
+            item.monthly_plans[savedPlan.month]!.id = savedPlan.id
+          }
+        }
+      }
+
+      // Clear changed items WITHOUT refreshing data - keep local values
       changedItems.value.clear()
-      // Refresh data
-      await fetchBudgetItems()
+
+      if (!isAutoSave) {
+        message.success(`${response.data.saved_count} rencana berhasil disimpan`)
+      }
+
+      // Reset status after 3 seconds
+      setTimeout(() => {
+        if (saveStatus.value === 'saved') {
+          saveStatus.value = 'idle'
+        }
+      }, 3000)
+    } else {
+      saveStatus.value = 'error'
+      saveError.value = response.data.message || 'Gagal menyimpan'
+      message.error(response.data.message || 'Gagal menyimpan sebagian data')
+      if (response.data.errors?.length > 0) {
+        response.data.errors.forEach((err: string) => message.warning(err))
+      }
     }
   } catch (err: any) {
-    message.error(err.response?.data?.message || 'Gagal menyimpan rencana')
+    console.error('Save error:', err)
+    saveStatus.value = 'error'
+    const errorMsg = err.response?.data?.message || err.message || 'Gagal menyimpan rencana'
+    saveError.value = errorMsg
+
+    if (!isAutoSave) {
+      message.error(errorMsg)
+    }
+
+    // If authentication error, suggest re-login
+    if (err.response?.status === 401) {
+      message.warning('Sesi Anda telah berakhir. Silakan login ulang.')
+    }
   } finally {
     saving.value = false
   }
@@ -499,6 +597,11 @@ watch([selectedYear], () => {
 onMounted(() => {
   fetchSubActivities()
 })
+
+onUnmounted(() => {
+  // Cancel any pending auto-save
+  cancelAutoSave()
+})
 </script>
 
 <template>
@@ -532,12 +635,53 @@ onMounted(() => {
             size="large"
           />
         </div>
-        <NSpace>
+        <NSpace align="center">
+          <!-- Auto-save Status Indicator -->
+          <div class="save-status-indicator">
+            <template v-if="saveStatus === 'pending'">
+              <NTag type="warning" size="small" round>
+                <template #icon>
+                  <NIcon><SyncOutline /></NIcon>
+                </template>
+                Menunggu...
+              </NTag>
+            </template>
+            <template v-else-if="saveStatus === 'saving'">
+              <NTag type="info" size="small" round>
+                <template #icon>
+                  <NIcon class="spinning"><SyncOutline /></NIcon>
+                </template>
+                Menyimpan...
+              </NTag>
+            </template>
+            <template v-else-if="saveStatus === 'saved'">
+              <NTag type="success" size="small" round>
+                <template #icon>
+                  <NIcon><CloudDoneOutline /></NIcon>
+                </template>
+                Tersimpan
+              </NTag>
+            </template>
+            <template v-else-if="saveStatus === 'error'">
+              <NTooltip>
+                <template #trigger>
+                  <NTag type="error" size="small" round>
+                    <template #icon>
+                      <NIcon><CloudOfflineOutline /></NIcon>
+                    </template>
+                    Gagal
+                  </NTag>
+                </template>
+                <span>{{ saveError }}</span>
+              </NTooltip>
+            </template>
+          </div>
+
           <NButton
             type="primary"
             :loading="saving"
             :disabled="changedItems.size === 0"
-            @click="saveAllPlans"
+            @click="saveAllPlans(false)"
           >
             <template #icon>
               <NIcon><SaveOutline /></NIcon>
@@ -1098,5 +1242,27 @@ onMounted(() => {
 
 .planning-grid tbody tr:nth-child(even) .sticky-col {
   background: #fafafa;
+}
+
+/* Auto-save status indicator */
+.save-status-indicator {
+  min-width: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* Spinning animation */
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>
