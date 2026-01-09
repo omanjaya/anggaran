@@ -2,7 +2,7 @@ import axios, { type AxiosInstance, type AxiosError } from 'axios'
 import router from '@/router'
 
 const api: AxiosInstance = axios.create({
-  baseURL: '/api',
+  baseURL: import.meta.env.VITE_API_URL || '/api',
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
