@@ -765,19 +765,19 @@ onUnmounted(() => {
               <th rowspan="3" class="col-uraian sticky-col sticky-left-1">Uraian</th>
               <th colspan="6" rowspan="2" class="col-header-group">Rincian Perhitungan</th>
               <!-- January - only 2 columns (no YTD) -->
-              <th colspan="2" class="col-month-header ">Januari</th>
+              <th colspan="2" class="col-month-header month-start">Januari</th>
               <!-- February onwards - 4 columns each (with YTD) -->
               <template v-for="month in months.slice(1)" :key="`header-${month.value}`">
-                <th colspan="4" class="col-month-header">{{ month.fullLabel }}</th>
+                <th colspan="4" class="col-month-header month-start">{{ month.fullLabel }}</th>
               </template>
             </tr>
             <!-- Row 2: Sub-headers for months -->
             <tr>
               <!-- January sub-headers -->
-              <th colspan="2" class="col-subheader ">Bulan Ini</th>
+              <th colspan="2" class="col-subheader month-start">Bulan Ini</th>
               <!-- February onwards sub-headers -->
               <template v-for="month in months.slice(1)" :key="`subheader-${month.value}`">
-                <th colspan="2" class="col-subheader">Bulan Ini</th>
+                <th colspan="2" class="col-subheader month-start">Bulan Ini</th>
                 <th colspan="2" class="col-subheader col-ytd">s/d Bulan Ini</th>
               </template>
             </tr>
@@ -790,11 +790,11 @@ onUnmounted(() => {
               <th class="col-sisa">Sisa Vol</th>
               <th class="col-sisa-budget">Sisa Anggaran</th>
               <!-- January columns -->
-              <th class="col-input ">Vol</th>
-              <th class="col-input ">Jumlah</th>
+              <th class="col-input month-start">Vol</th>
+              <th class="col-input">Jumlah</th>
               <!-- February onwards columns -->
               <template v-for="month in months.slice(1)" :key="`cols-${month.value}`">
-                <th class="col-input">Vol</th>
+                <th class="col-input month-start">Vol</th>
                 <th class="col-input">Jumlah</th>
                 <th class="col-input col-ytd">Vol</th>
                 <th class="col-input col-ytd">Jumlah</th>
@@ -868,7 +868,7 @@ onUnmounted(() => {
               </td>
 
               <!-- January - Input only (no YTD) -->
-              <td class="col-input " :class="{ 'col-disabled': isCellDisabled(item, 1) }">
+              <td class="col-input month-start" :class="{ 'col-disabled': isCellDisabled(item, 1) }">
                 <NTooltip v-if="isCellDisabled(item, 1)" placement="top">
                   <template #trigger>
                     <div class="disabled-cell">
@@ -911,7 +911,7 @@ onUnmounted(() => {
               <!-- February onwards - Input + YTD -->
               <template v-for="month in months.slice(1)" :key="`data-${item.id}-${month.value}`">
                 <!-- Current month input -->
-                <td class="col-input" :class="{ 'col-disabled': isCellDisabled(item, month.value) }">
+                <td class="col-input month-start" :class="{ 'col-disabled': isCellDisabled(item, month.value) }">
                   <NTooltip v-if="isCellDisabled(item, month.value)" placement="top">
                     <template #trigger>
                       <div class="disabled-cell">
@@ -965,11 +965,11 @@ onUnmounted(() => {
               <td colspan="2" class="sticky-col sticky-left-0 text-right font-bold">TOTAL</td>
               <td colspan="6" class="col-jumlah font-bold">{{ formatCurrency(grandTotal.budget) }}</td>
               <!-- January totals -->
-              <td class="col-input  font-medium">{{ (monthlyTotals[1]?.volume || 0).toFixed(2) }}</td>
-              <td class="col-input  font-medium">{{ formatCurrency(monthlyTotals[1]?.amount || 0) }}</td>
+              <td class="col-input month-start font-medium">{{ (monthlyTotals[1]?.volume || 0).toFixed(2) }}</td>
+              <td class="col-input font-medium">{{ formatCurrency(monthlyTotals[1]?.amount || 0) }}</td>
               <!-- February onwards totals -->
               <template v-for="month in months.slice(1)" :key="`total-${month.value}`">
-                <td class="col-input font-medium">{{ (monthlyTotals[month.value]?.volume || 0).toFixed(2) }}</td>
+                <td class="col-input month-start font-medium">{{ (monthlyTotals[month.value]?.volume || 0).toFixed(2) }}</td>
                 <td class="col-input font-medium">{{ formatCurrency(monthlyTotals[month.value]?.amount || 0) }}</td>
                 <td class="col-input col-ytd font-medium">{{ (monthlyTotals[month.value]?.ytdVolume || 0).toFixed(2) }}</td>
                 <td class="col-input col-ytd font-medium">{{ formatCurrency(monthlyTotals[month.value]?.ytdAmount || 0) }}</td>
@@ -1277,5 +1277,14 @@ onUnmounted(() => {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* Month separator lines */
+.month-start {
+  border-left: 2px solid #1e3a5f !important;
+}
+
+.planning-grid thead .month-start {
+  border-left: 2px solid #fff !important;
 }
 </style>

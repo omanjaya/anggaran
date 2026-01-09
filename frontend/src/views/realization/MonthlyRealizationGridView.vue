@@ -1055,14 +1055,14 @@ onUnmounted(() => {
               <th colspan="6" rowspan="2" class="col-header-group">Rincian DPA</th>
               <!-- Per month headers: Rencana(2/4) + Realisasi(2/4) + Deviasi(2/4) + Progress(2) -->
               <template v-for="month in months" :key="`header-${month.value}`">
-                <th :colspan="month.value === 1 ? 8 : 14" class="col-month-header">{{ month.fullLabel }}</th>
+                <th :colspan="month.value === 1 ? 8 : 14" class="col-month-header month-start">{{ month.fullLabel }}</th>
               </template>
               <th colspan="2" rowspan="2" class="col-sisa-header">SISA</th>
             </tr>
             <!-- Row 2: Rencana / Realisasi / DEV / Progress sub-headers -->
             <tr>
               <template v-for="month in months" :key="`subheader-${month.value}`">
-                <th :colspan="month.value === 1 ? 2 : 4" class="col-subheader col-rencana">Rencana</th>
+                <th :colspan="month.value === 1 ? 2 : 4" class="col-subheader col-rencana month-start">Rencana</th>
                 <th :colspan="month.value === 1 ? 2 : 4" class="col-subheader col-realisasi">Realisasi</th>
                 <th :colspan="month.value === 1 ? 2 : 4" class="col-subheader col-deviation">Deviasi</th>
                 <th colspan="2" class="col-subheader col-progress">Progress %</th>
@@ -1079,7 +1079,7 @@ onUnmounted(() => {
               <!-- Per month columns -->
               <template v-for="month in months" :key="`cols-${month.value}`">
                 <!-- Rencana columns -->
-                <th class="col-input col-rencana">Vol</th>
+                <th class="col-input col-rencana month-start">Vol</th>
                 <th class="col-input col-rencana">Jml</th>
                 <template v-if="month.value > 1">
                   <th class="col-input col-rencana col-ytd">s/d Vol</th>
@@ -1177,7 +1177,7 @@ onUnmounted(() => {
               <!-- Per month data -->
               <template v-for="month in months" :key="`data-${item.id}-${month.value}`">
                 <!-- Rencana columns (read-only) -->
-                <td class="col-input col-rencana col-readonly">
+                <td class="col-input col-rencana col-readonly month-start">
                   {{ getMonthPlan(item, month.value).planned_volume.toFixed(2) }}
                 </td>
                 <td class="col-input col-rencana col-readonly">
@@ -1285,7 +1285,7 @@ onUnmounted(() => {
               <!-- Per month totals -->
               <template v-for="month in months" :key="`total-${month.value}`">
                 <!-- Rencana totals -->
-                <td class="col-input col-rencana font-medium">
+                <td class="col-input col-rencana font-medium month-start">
                   {{ (monthlyTotals[month.value]?.plannedVolume || 0).toFixed(2) }}
                 </td>
                 <td class="col-input col-rencana font-medium">
@@ -1838,5 +1838,14 @@ onUnmounted(() => {
   padding: 2px 4px;
   background: #ecfdf5;
   border-radius: 3px;
+}
+
+/* Month separator lines */
+.month-start {
+  border-left: 2px solid #1e3a5f !important;
+}
+
+.realization-grid thead .month-start {
+  border-left: 2px solid #fff !important;
 }
 </style>
