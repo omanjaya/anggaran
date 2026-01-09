@@ -107,20 +107,34 @@ const editableItems = computed(() => {
     .sort((a, b) => a.code.localeCompare(b.code))
 })
 
-// Calculate totals per month
+// Calculate totals per month (including cumulative)
 const monthlyTotals = computed(() => {
-  const totals: Record<number, { volume: number; amount: number }> = {}
+  const totals: Record<number, { volume: number; amount: number; ytdVolume: number; ytdAmount: number }> = {}
+
+  let cumulativeVolume = 0
+  let cumulativeAmount = 0
 
   for (const month of months) {
-    const monthTotals = { volume: 0, amount: 0 }
+    let monthVolume = 0
+    let monthAmount = 0
+
     for (const item of editableItems.value) {
       const plan = item.monthly_plans?.[month.value]
       if (plan) {
-        monthTotals.volume += Number(plan.planned_volume) || 0
-        monthTotals.amount += Number(plan.planned_amount) || 0
+        monthVolume += Number(plan.planned_volume) || 0
+        monthAmount += Number(plan.planned_amount) || 0
       }
     }
-    totals[month.value] = monthTotals
+
+    cumulativeVolume += monthVolume
+    cumulativeAmount += monthAmount
+
+    totals[month.value] = {
+      volume: monthVolume,
+      amount: monthAmount,
+      ytdVolume: cumulativeVolume,
+      ytdAmount: cumulativeAmount
+    }
   }
 
   return totals
@@ -273,6 +287,22 @@ function getMonthPlan(item: BudgetItem, month: number): MonthlyPlanData {
   return item.monthly_plans?.[month] || { planned_volume: 0, planned_amount: 0 }
 }
 
+// Calculate cumulative (YTD) values for an item up to a given month
+function getYtdValues(item: BudgetItem, upToMonth: number): { volume: number; amount: number } {
+  let totalVolume = 0
+  let totalAmount = 0
+
+  for (let m = 1; m <= upToMonth; m++) {
+    const plan = item.monthly_plans?.[m]
+    if (plan) {
+      totalVolume += Number(plan.planned_volume) || 0
+      totalAmount += Number(plan.planned_amount) || 0
+    }
+  }
+
+  return { volume: totalVolume, amount: totalAmount }
+}
+
 watch([selectedYear], () => {
   if (selectedSubActivityId.value) {
     fetchBudgetItems()
@@ -382,27 +412,50 @@ onMounted(() => {
       <div class="planning-grid-wrapper">
         <table class="planning-grid">
           <thead>
+            <!-- Row 1: Main headers -->
             <tr>
-              <th rowspan="2" class="col-code sticky-col">Kode Rekening</th>
-              <th rowspan="2" class="col-uraian sticky-col">Uraian</th>
-              <th colspan="4" class="col-header-group">Rincian Perhitungan</th>
-              <th v-for="month in months" :key="month.value" colspan="2" class="col-month-header">
-                {{ month.fullLabel }}
-              </th>
+              <th rowspan="3" class="col-code sticky-col sticky-left-0">Kode Rekening</th>
+              <th rowspan="3" class="col-uraian sticky-col sticky-left-1">Uraian</th>
+              <th colspan="4" rowspan="2" class="col-header-group">Rincian Perhitungan</th>
+              <!-- January - only 2 columns (no YTD) -->
+              <th colspan="2" class="col-month-header col-month-jan">Januari</th>
+              <!-- February onwards - 4 columns each (with YTD) -->
+              <template v-for="month in months.slice(1)" :key="`header-${month.value}`">
+                <th colspan="4" class="col-month-header">{{ month.fullLabel }}</th>
+              </template>
             </tr>
+            <!-- Row 2: Sub-headers for months -->
             <tr>
-              <th class="col-volume">Volume</th>
+              <!-- January sub-headers -->
+              <th colspan="2" class="col-subheader col-month-jan">Bulan Ini</th>
+              <!-- February onwards sub-headers -->
+              <template v-for="month in months.slice(1)" :key="`subheader-${month.value}`">
+                <th colspan="2" class="col-subheader">Bulan Ini</th>
+                <th colspan="2" class="col-subheader col-ytd">s/d Bulan Ini</th>
+              </template>
+            </tr>
+            <!-- Row 3: Column labels -->
+            <tr>
+              <th class="col-volume">Vol</th>
               <th class="col-satuan">Satuan</th>
               <th class="col-harga">Harga</th>
               <th class="col-jumlah">Jumlah</th>
-              <th v-for="month in months" :key="`vol-${month.value}`" class="col-input">Vol</th>
-              <th v-for="month in months" :key="`amt-${month.value}`" class="col-input">Jumlah</th>
+              <!-- January columns -->
+              <th class="col-input col-month-jan">Vol</th>
+              <th class="col-input col-month-jan">Jumlah</th>
+              <!-- February onwards columns -->
+              <template v-for="month in months.slice(1)" :key="`cols-${month.value}`">
+                <th class="col-input">Vol</th>
+                <th class="col-input">Jumlah</th>
+                <th class="col-input col-ytd">Vol</th>
+                <th class="col-input col-ytd">Jumlah</th>
+              </template>
             </tr>
           </thead>
           <tbody>
             <tr v-for="item in editableItems" :key="item.id" :class="{ 'row-changed': changedItems.has(item.id) }">
-              <td class="col-code sticky-col">{{ item.code }}</td>
-              <td class="col-uraian sticky-col">
+              <td class="col-code sticky-col sticky-left-0">{{ item.code }}</td>
+              <td class="col-uraian sticky-col sticky-left-1">
                 <div class="item-name">{{ item.name }}</div>
                 <div v-if="item.group_name" class="item-meta">{{ item.group_name }}</div>
               </td>
@@ -411,8 +464,32 @@ onMounted(() => {
               <td class="col-harga">{{ formatCurrency(item.unit_price) }}</td>
               <td class="col-jumlah">{{ formatCurrency(item.total_budget) }}</td>
 
-              <!-- Monthly inputs - Volume -->
-              <template v-for="month in months" :key="`input-vol-${item.id}-${month.value}`">
+              <!-- January - Input only (no YTD) -->
+              <td class="col-input col-month-jan">
+                <NInputNumber
+                  :value="getMonthPlan(item, 1).planned_volume || null"
+                  :min="0"
+                  :precision="2"
+                  size="small"
+                  placeholder="0"
+                  :show-button="false"
+                  @update:value="(v) => onVolumeChange(item, 1, v)"
+                />
+              </td>
+              <td class="col-input col-month-jan">
+                <NInputNumber
+                  :value="getMonthPlan(item, 1).planned_amount || null"
+                  :min="0"
+                  size="small"
+                  placeholder="0"
+                  :show-button="false"
+                  @update:value="(v) => onAmountChange(item, 1, v)"
+                />
+              </td>
+
+              <!-- February onwards - Input + YTD -->
+              <template v-for="month in months.slice(1)" :key="`data-${item.id}-${month.value}`">
+                <!-- Current month input -->
                 <td class="col-input">
                   <NInputNumber
                     :value="getMonthPlan(item, month.value).planned_volume || null"
@@ -424,11 +501,7 @@ onMounted(() => {
                     @update:value="(v) => onVolumeChange(item, month.value, v)"
                   />
                 </td>
-              </template>
-
-              <!-- Monthly inputs - Amount -->
-              <template v-for="month in months" :key="`input-amt-${item.id}-${month.value}`">
-                <td class="col-input col-amount-input">
+                <td class="col-input">
                   <NInputNumber
                     :value="getMonthPlan(item, month.value).planned_amount || null"
                     :min="0"
@@ -438,18 +511,29 @@ onMounted(() => {
                     @update:value="(v) => onAmountChange(item, month.value, v)"
                   />
                 </td>
+                <!-- YTD (cumulative) - read only -->
+                <td class="col-input col-ytd col-readonly">
+                  {{ getYtdValues(item, month.value).volume.toFixed(2) }}
+                </td>
+                <td class="col-input col-ytd col-readonly">
+                  {{ formatCurrency(getYtdValues(item, month.value).amount) }}
+                </td>
               </template>
             </tr>
           </tbody>
           <tfoot>
             <tr class="total-row">
-              <td colspan="2" class="sticky-col text-right font-bold">TOTAL</td>
+              <td colspan="2" class="sticky-col sticky-left-0 text-right font-bold">TOTAL</td>
               <td colspan="4" class="col-jumlah font-bold">{{ formatCurrency(grandTotal.budget) }}</td>
-              <template v-for="month in months" :key="`total-vol-${month.value}`">
+              <!-- January totals -->
+              <td class="col-input col-month-jan font-medium">{{ (monthlyTotals[1]?.volume || 0).toFixed(2) }}</td>
+              <td class="col-input col-month-jan font-medium">{{ formatCurrency(monthlyTotals[1]?.amount || 0) }}</td>
+              <!-- February onwards totals -->
+              <template v-for="month in months.slice(1)" :key="`total-${month.value}`">
                 <td class="col-input font-medium">{{ (monthlyTotals[month.value]?.volume || 0).toFixed(2) }}</td>
-              </template>
-              <template v-for="month in months" :key="`total-amt-${month.value}`">
-                <td class="col-input col-amount-input font-medium">{{ formatCurrency(monthlyTotals[month.value]?.amount || 0) }}</td>
+                <td class="col-input font-medium">{{ formatCurrency(monthlyTotals[month.value]?.amount || 0) }}</td>
+                <td class="col-input col-ytd font-medium">{{ (monthlyTotals[month.value]?.ytdVolume || 0).toFixed(2) }}</td>
+                <td class="col-input col-ytd font-medium">{{ formatCurrency(monthlyTotals[month.value]?.ytdAmount || 0) }}</td>
               </template>
             </tr>
           </tfoot>
@@ -464,13 +548,15 @@ onMounted(() => {
   overflow-x: auto;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
+  max-height: 70vh;
+  overflow-y: auto;
 }
 
 .planning-grid {
   width: max-content;
   min-width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .planning-grid thead {
@@ -482,7 +568,7 @@ onMounted(() => {
 }
 
 .planning-grid th {
-  padding: 8px 10px;
+  padding: 6px 8px;
   text-align: center;
   font-weight: 600;
   border: 1px solid rgba(255,255,255,0.2);
@@ -490,7 +576,7 @@ onMounted(() => {
 }
 
 .planning-grid td {
-  padding: 6px 8px;
+  padding: 4px 6px;
   border: 1px solid #e5e7eb;
   vertical-align: middle;
 }
@@ -502,25 +588,25 @@ onMounted(() => {
   z-index: 10;
 }
 
+.sticky-left-0 {
+  left: 0;
+  min-width: 130px;
+}
+
+.sticky-left-1 {
+  left: 130px;
+  min-width: 180px;
+  max-width: 200px;
+}
+
 .planning-grid thead .sticky-col {
   background: #1e3a5f;
   z-index: 25;
 }
 
-.planning-grid .col-code.sticky-col {
-  left: 0;
-  min-width: 140px;
-}
-
-.planning-grid .col-uraian.sticky-col {
-  left: 140px;
-  min-width: 200px;
-  max-width: 250px;
-}
-
 .planning-grid .col-code {
   font-family: 'Courier New', monospace;
-  font-size: 11px;
+  font-size: 10px;
   white-space: nowrap;
 }
 
@@ -530,27 +616,28 @@ onMounted(() => {
 
 .item-name {
   font-weight: 500;
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 1.3;
 }
 
 .item-meta {
-  font-size: 10px;
+  font-size: 9px;
   color: #6b7280;
   margin-top: 2px;
 }
 
 .planning-grid .col-volume,
 .planning-grid .col-satuan {
-  width: 60px;
+  width: 50px;
   text-align: center;
 }
 
 .planning-grid .col-harga,
 .planning-grid .col-jumlah {
-  width: 100px;
+  width: 90px;
   text-align: right;
   font-family: 'Courier New', monospace;
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .planning-grid .col-header-group {
@@ -559,16 +646,37 @@ onMounted(() => {
 
 .planning-grid .col-month-header {
   background: #3b5998;
-  min-width: 140px;
+}
+
+.planning-grid .col-month-jan {
+  background: #4a6fa5;
+}
+
+.planning-grid .col-subheader {
+  background: #4a6fa5;
+  font-size: 10px;
+}
+
+.planning-grid .col-ytd {
+  background: #e8f4e8 !important;
+  color: #166534;
+}
+
+.planning-grid thead .col-ytd {
+  background: #2d5a2d !important;
+  color: white;
 }
 
 .planning-grid .col-input {
-  width: 70px;
-  padding: 2px 4px;
+  width: 65px;
+  padding: 2px 3px;
+  text-align: right;
+  font-size: 10px;
 }
 
-.planning-grid .col-amount-input {
-  width: 90px;
+.planning-grid .col-readonly {
+  background: #f3f4f6;
+  font-family: 'Courier New', monospace;
 }
 
 .planning-grid .col-input :deep(.n-input-number) {
@@ -577,7 +685,7 @@ onMounted(() => {
 
 .planning-grid .col-input :deep(.n-input__input-el) {
   text-align: right;
-  font-size: 11px;
+  font-size: 10px;
   padding: 2px 4px;
 }
 
@@ -586,11 +694,23 @@ onMounted(() => {
   background: #fef3c7 !important;
 }
 
+.row-changed .sticky-col {
+  background: #fef3c7 !important;
+}
+
 .planning-grid tbody tr:hover {
   background: #f3f4f6;
 }
 
+.planning-grid tbody tr:hover .sticky-col {
+  background: #f3f4f6;
+}
+
 .planning-grid tbody tr:hover.row-changed {
+  background: #fde68a;
+}
+
+.planning-grid tbody tr:hover.row-changed .sticky-col {
   background: #fde68a;
 }
 
@@ -607,17 +727,17 @@ onMounted(() => {
 }
 
 .total-row td {
-  padding: 10px 8px;
+  padding: 8px 6px;
   border-top: 2px solid #1e3a5f;
   font-weight: 600;
 }
 
-/* Alternating month columns */
-.planning-grid tbody td:nth-child(n+7):nth-child(-n+18) {
-  background: #f8fafc;
+/* Zebra striping for better readability */
+.planning-grid tbody tr:nth-child(even) {
+  background: #fafafa;
 }
 
-.planning-grid tbody td:nth-child(n+19) {
-  background: #fff;
+.planning-grid tbody tr:nth-child(even) .sticky-col {
+  background: #fafafa;
 }
 </style>
