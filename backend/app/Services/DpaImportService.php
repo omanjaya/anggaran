@@ -119,12 +119,15 @@ class DpaImportService
 
     protected function importProgram(array $header, Skpd $skpd): Program
     {
+        // Map based on program/activity name to valid BudgetCategory enum
+        $category = $this->mapToCategory($header['program']['name'] ?? '');
+
         $program = Program::firstOrCreate(
             ['code' => $header['program']['code']],
             [
                 'skpd_id' => $skpd->id,
                 'name' => $header['program']['name'],
-                'category' => $header['bidang_urusan']['name'] ?? 'Umum',
+                'category' => $category,
                 'fiscal_year' => $header['tahun_anggaran'] ?? date('Y'),
                 'total_budget' => 0,
                 'is_active' => true,
@@ -357,5 +360,30 @@ class DpaImportService
         }
 
         return substr($short, 0, 20);
+    }
+
+    protected function mapToCategory(string $name): string
+    {
+        $name = strtolower($name);
+
+        // Map keywords to BudgetCategory enum values
+        if (str_contains($name, 'analisis') || str_contains($name, 'kebutuhan')) {
+            return 'ANALISIS';
+        }
+        if (str_contains($name, 'tata kelola') || str_contains($name, 'kebijakan')) {
+            return 'TATA_KELOLA';
+        }
+        if (str_contains($name, 'operasional')) {
+            return 'OPERASIONALISASI';
+        }
+        if (str_contains($name, 'layanan') || str_contains($name, 'penyediaan')) {
+            return 'LAYANAN';
+        }
+        if (str_contains($name, 'elektronik') || str_contains($name, 'pelaksanaan')) {
+            return 'ELEK_NON_ELEK';
+        }
+
+        // Default category
+        return 'OPERASIONALISASI';
     }
 }
