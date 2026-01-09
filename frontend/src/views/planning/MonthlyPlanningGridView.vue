@@ -765,7 +765,7 @@ onUnmounted(() => {
               <th rowspan="3" class="col-uraian sticky-col sticky-left-1">Uraian</th>
               <th colspan="6" rowspan="2" class="col-header-group">Rincian Perhitungan</th>
               <!-- January - only 2 columns (no YTD) -->
-              <th colspan="2" class="col-month-header col-month-jan">Januari</th>
+              <th colspan="2" class="col-month-header ">Januari</th>
               <!-- February onwards - 4 columns each (with YTD) -->
               <template v-for="month in months.slice(1)" :key="`header-${month.value}`">
                 <th colspan="4" class="col-month-header">{{ month.fullLabel }}</th>
@@ -774,7 +774,7 @@ onUnmounted(() => {
             <!-- Row 2: Sub-headers for months -->
             <tr>
               <!-- January sub-headers -->
-              <th colspan="2" class="col-subheader col-month-jan">Bulan Ini</th>
+              <th colspan="2" class="col-subheader ">Bulan Ini</th>
               <!-- February onwards sub-headers -->
               <template v-for="month in months.slice(1)" :key="`subheader-${month.value}`">
                 <th colspan="2" class="col-subheader">Bulan Ini</th>
@@ -790,8 +790,8 @@ onUnmounted(() => {
               <th class="col-sisa">Sisa Vol</th>
               <th class="col-sisa-budget">Sisa Anggaran</th>
               <!-- January columns -->
-              <th class="col-input col-month-jan">Vol</th>
-              <th class="col-input col-month-jan">Jumlah</th>
+              <th class="col-input ">Vol</th>
+              <th class="col-input ">Jumlah</th>
               <!-- February onwards columns -->
               <template v-for="month in months.slice(1)" :key="`cols-${month.value}`">
                 <th class="col-input">Vol</th>
@@ -868,7 +868,7 @@ onUnmounted(() => {
               </td>
 
               <!-- January - Input only (no YTD) -->
-              <td class="col-input col-month-jan" :class="{ 'col-disabled': isCellDisabled(item, 1) }">
+              <td class="col-input " :class="{ 'col-disabled': isCellDisabled(item, 1) }">
                 <NTooltip v-if="isCellDisabled(item, 1)" placement="top">
                   <template #trigger>
                     <div class="disabled-cell">
@@ -889,7 +889,7 @@ onUnmounted(() => {
                   @update:value="(v) => onVolumeChange(item, 1, v)"
                 />
               </td>
-              <td class="col-input col-month-jan" :class="{ 'col-disabled': isCellDisabled(item, 1) }">
+              <td class="col-input " :class="{ 'col-disabled': isCellDisabled(item, 1) }">
                 <NTooltip v-if="isCellDisabled(item, 1)" placement="top">
                   <template #trigger>
                     <div class="disabled-cell">-</div>
@@ -965,8 +965,8 @@ onUnmounted(() => {
               <td colspan="2" class="sticky-col sticky-left-0 text-right font-bold">TOTAL</td>
               <td colspan="6" class="col-jumlah font-bold">{{ formatCurrency(grandTotal.budget) }}</td>
               <!-- January totals -->
-              <td class="col-input col-month-jan font-medium">{{ (monthlyTotals[1]?.volume || 0).toFixed(2) }}</td>
-              <td class="col-input col-month-jan font-medium">{{ formatCurrency(monthlyTotals[1]?.amount || 0) }}</td>
+              <td class="col-input  font-medium">{{ (monthlyTotals[1]?.volume || 0).toFixed(2) }}</td>
+              <td class="col-input  font-medium">{{ formatCurrency(monthlyTotals[1]?.amount || 0) }}</td>
               <!-- February onwards totals -->
               <template v-for="month in months.slice(1)" :key="`total-${month.value}`">
                 <td class="col-input font-medium">{{ (monthlyTotals[month.value]?.volume || 0).toFixed(2) }}</td>
@@ -1003,18 +1003,18 @@ onUnmounted(() => {
 
 /* Custom scrollbar */
 .planning-grid-wrapper::-webkit-scrollbar {
-  height: 10px;
-  width: 10px;
+  height: 12px;
+  width: 12px;
 }
 
 .planning-grid-wrapper::-webkit-scrollbar-track {
   background: #f1f5f9;
-  border-radius: 5px;
+  border-radius: 6px;
 }
 
 .planning-grid-wrapper::-webkit-scrollbar-thumb {
   background: #94a3b8;
-  border-radius: 5px;
+  border-radius: 6px;
 }
 
 .planning-grid-wrapper::-webkit-scrollbar-thumb:hover {
@@ -1025,7 +1025,7 @@ onUnmounted(() => {
   width: max-content;
   min-width: 100%;
   border-collapse: collapse;
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .planning-grid thead {
@@ -1037,7 +1037,7 @@ onUnmounted(() => {
 }
 
 .planning-grid th {
-  padding: 6px 8px;
+  padding: 10px 12px;
   text-align: center;
   font-weight: 600;
   border: 1px solid rgba(255,255,255,0.2);
@@ -1045,7 +1045,7 @@ onUnmounted(() => {
 }
 
 .planning-grid td {
-  padding: 4px 6px;
+  padding: 6px 8px;
   border: 1px solid #e5e7eb;
   vertical-align: middle;
 }
@@ -1075,7 +1075,7 @@ onUnmounted(() => {
 
 .planning-grid .col-code {
   font-family: 'Courier New', monospace;
-  font-size: 10px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -1085,37 +1085,37 @@ onUnmounted(() => {
 
 .item-name {
   font-weight: 500;
-  font-size: 11px;
-  line-height: 1.3;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .item-meta {
-  font-size: 9px;
+  font-size: 11px;
   color: #6b7280;
   margin-top: 2px;
 }
 
 .planning-grid .col-volume,
 .planning-grid .col-satuan {
-  width: 50px;
+  width: 60px;
   text-align: center;
 }
 
 .planning-grid .col-harga,
 .planning-grid .col-jumlah {
-  width: 90px;
+  width: 110px;
   text-align: right;
   font-family: 'Courier New', monospace;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .planning-grid .col-sisa {
-  width: 70px;
+  width: 80px;
   text-align: center;
 }
 
 .planning-grid .col-sisa-budget {
-  width: 100px;
+  width: 120px;
   text-align: center;
 }
 
@@ -1123,16 +1123,16 @@ onUnmounted(() => {
 .sisa-budget {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 
 .sisa-value {
   font-weight: 600;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .sisa-budget .sisa-value {
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .sisa-value.success {
@@ -1148,41 +1148,38 @@ onUnmounted(() => {
 }
 
 .planning-grid .col-header-group {
-  background: #2d4a6f;
+  background: #1e3a5f;
 }
 
 .planning-grid .col-month-header {
-  background: #3b5998;
-}
-
-.planning-grid .col-month-jan {
-  background: #4a6fa5;
+  background: #1e3a5f;
 }
 
 .planning-grid .col-subheader {
-  background: #4a6fa5;
-  font-size: 10px;
+  background: #2d4a6f;
+  font-size: 12px;
 }
 
+/* YTD columns - subtle gray difference */
 .planning-grid .col-ytd {
-  background: #e8f4e8 !important;
-  color: #166534;
+  background: #f8fafc !important;
+  color: #475569;
 }
 
 .planning-grid thead .col-ytd {
-  background: #2d5a2d !important;
+  background: #334155 !important;
   color: white;
 }
 
 .planning-grid .col-input {
-  width: 65px;
-  padding: 2px 3px;
+  width: 85px;
+  padding: 4px 6px;
   text-align: right;
-  font-size: 10px;
+  font-size: 13px;
 }
 
 .planning-grid .col-readonly {
-  background: #f3f4f6;
+  background: #f8fafc;
   font-family: 'Courier New', monospace;
 }
 
@@ -1195,7 +1192,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   color: #dc2626;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .planning-grid .col-input :deep(.n-input-number) {
@@ -1204,8 +1201,8 @@ onUnmounted(() => {
 
 .planning-grid .col-input :deep(.n-input__input-el) {
   text-align: right;
-  font-size: 10px;
-  padding: 2px 4px;
+  font-size: 13px;
+  padding: 4px 6px;
 }
 
 /* Row states */

@@ -1373,18 +1373,18 @@ onUnmounted(() => {
 
 /* Custom scrollbar */
 .realization-grid-wrapper::-webkit-scrollbar {
-  height: 10px;
-  width: 10px;
+  height: 12px;
+  width: 12px;
 }
 
 .realization-grid-wrapper::-webkit-scrollbar-track {
   background: #f1f5f9;
-  border-radius: 5px;
+  border-radius: 6px;
 }
 
 .realization-grid-wrapper::-webkit-scrollbar-thumb {
   background: #94a3b8;
-  border-radius: 5px;
+  border-radius: 6px;
 }
 
 .realization-grid-wrapper::-webkit-scrollbar-thumb:hover {
@@ -1395,7 +1395,7 @@ onUnmounted(() => {
   width: max-content;
   min-width: 100%;
   border-collapse: collapse;
-  font-size: 10px;
+  font-size: 13px;
 }
 
 .realization-grid thead {
@@ -1407,7 +1407,7 @@ onUnmounted(() => {
 }
 
 .realization-grid th {
-  padding: 4px 6px;
+  padding: 8px 10px;
   text-align: center;
   font-weight: 600;
   border: 1px solid rgba(255,255,255,0.2);
@@ -1415,7 +1415,7 @@ onUnmounted(() => {
 }
 
 .realization-grid td {
-  padding: 3px 4px;
+  padding: 5px 6px;
   border: 1px solid #e5e7eb;
   vertical-align: middle;
 }
@@ -1429,13 +1429,13 @@ onUnmounted(() => {
 
 .sticky-left-0 {
   left: 0;
-  min-width: 110px;
+  min-width: 130px;
 }
 
 .sticky-left-1 {
-  left: 110px;
-  min-width: 150px;
-  max-width: 170px;
+  left: 130px;
+  min-width: 170px;
+  max-width: 200px;
 }
 
 .realization-grid thead .sticky-col {
@@ -1445,7 +1445,7 @@ onUnmounted(() => {
 
 .realization-grid .col-code {
   font-family: 'Courier New', monospace;
-  font-size: 9px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -1455,37 +1455,37 @@ onUnmounted(() => {
 
 .item-name {
   font-weight: 500;
-  font-size: 10px;
-  line-height: 1.2;
+  font-size: 13px;
+  line-height: 1.3;
 }
 
 .item-meta {
-  font-size: 8px;
+  font-size: 11px;
   color: #6b7280;
-  margin-top: 1px;
+  margin-top: 2px;
 }
 
 .realization-grid .col-volume,
 .realization-grid .col-satuan {
-  width: 40px;
+  width: 55px;
   text-align: center;
 }
 
 .realization-grid .col-harga,
 .realization-grid .col-jumlah {
-  width: 75px;
+  width: 100px;
   text-align: right;
   font-family: 'Courier New', monospace;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .realization-grid .col-sisa-vol {
-  width: 60px;
+  width: 70px;
   text-align: center;
 }
 
 .realization-grid .col-sisa-budget {
-  width: 85px;
+  width: 100px;
   text-align: center;
 }
 
@@ -1493,16 +1493,16 @@ onUnmounted(() => {
 .sisa-budget {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 
 .sisa-value {
   font-weight: 600;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .sisa-budget .sisa-value {
-  font-size: 8px;
+  font-size: 11px;
 }
 
 .sisa-value.success {
@@ -1518,16 +1518,16 @@ onUnmounted(() => {
 }
 
 .realization-grid .col-header-group {
-  background: #2d4a6f;
+  background: #1e3a5f;
 }
 
 .realization-grid .col-month-header {
-  background: #3b5998;
+  background: #1e3a5f;
 }
 
 .realization-grid .col-subheader {
-  background: #4a6fa5;
-  font-size: 9px;
+  background: #2d4a6f;
+  font-size: 12px;
 }
 
 .realization-grid .col-rencana {
@@ -1644,14 +1644,15 @@ onUnmounted(() => {
 }
 
 .realization-grid .col-input {
-  width: 55px;
-  padding: 2px 3px;
+  width: 80px;
+  padding: 4px 5px;
   text-align: right;
-  font-size: 9px;
+  font-size: 13px;
 }
 
 .realization-grid .col-readonly {
   font-family: 'Courier New', monospace;
+  background: #f8fafc;
 }
 
 .realization-grid .col-disabled {
@@ -1663,7 +1664,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   color: #dc2626;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .realization-grid .col-input :deep(.n-input-number) {
@@ -1672,8 +1673,8 @@ onUnmounted(() => {
 
 .realization-grid .col-input :deep(.n-input__input-el) {
   text-align: right;
-  font-size: 9px;
-  padding: 1px 3px;
+  font-size: 13px;
+  padding: 4px 5px;
 }
 
 /* Row states */
