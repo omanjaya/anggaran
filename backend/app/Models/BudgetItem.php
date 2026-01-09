@@ -16,6 +16,10 @@ class BudgetItem extends Model
         'sub_activity_id',
         'code',
         'name',
+        'group_name',
+        'sumber_dana',
+        'level',
+        'is_detail_code',
         'unit',
         'volume',
         'unit_price',
@@ -26,6 +30,8 @@ class BudgetItem extends Model
     protected function casts(): array
     {
         return [
+            'level' => 'integer',
+            'is_detail_code' => 'boolean',
             'volume' => 'decimal:2',
             'unit_price' => 'decimal:2',
             'total_budget' => 'decimal:2',

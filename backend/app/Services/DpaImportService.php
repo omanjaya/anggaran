@@ -295,6 +295,10 @@ class DpaImportService
                 ],
                 [
                     'name' => $item['description'],
+                    'group_name' => $item['group_name'] ?? null,
+                    'sumber_dana' => $item['sumber_dana'] ?? null,
+                    'level' => $item['level'] ?? 1,
+                    'is_detail_code' => $item['is_detail_code'] ?? false,
                     'unit' => $unit,
                     'volume' => $totalVolume,
                     'unit_price' => $avgUnitPrice,
