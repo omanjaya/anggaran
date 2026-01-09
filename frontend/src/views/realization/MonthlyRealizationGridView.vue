@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import {
-  NCard, NSelect, NSpin, NEmpty, NButton, NIcon, NInputNumber, NSpace, NTag, NTooltip, NProgress
+  NCard, NSelect, NSpin, NEmpty, NButton, NIcon, NInputNumber, NSpace, NTag, NTooltip, NProgress, NGrid, NGridItem
 } from 'naive-ui'
-import { SaveOutline, RefreshOutline, CloseCircle } from '@vicons/ionicons5'
+import { SaveOutline, RefreshOutline, CloseCircle, TrendingUpOutline, TrendingDownOutline, WalletOutline, CubeOutline } from '@vicons/ionicons5'
 import { useFormat, useMessage } from '@/composables'
 import api from '@/services/api'
 
@@ -309,6 +309,54 @@ function getUsageStatus(percent: number): 'success' | 'warning' | 'error' {
   return 'success'
 }
 
+// ============ DEVIATION FUNCTIONS ============
+
+// Get deviation for a specific month (Plan - Realization)
+function getMonthDeviation(item: BudgetItem, month: number): { volume: number; amount: number } {
+  const plan = getMonthPlan(item, month)
+  const real = getMonthRealization(item, month)
+  return {
+    volume: plan.planned_volume - real.realized_volume,
+    amount: plan.planned_amount - real.realized_amount
+  }
+}
+
+// Get YTD deviation (cumulative plan - cumulative realization)
+function getYtdDeviation(item: BudgetItem, upToMonth: number): { volume: number; amount: number } {
+  const ytdPlan = getYtdPlannedValues(item, upToMonth)
+  const ytdReal = getYtdRealizedValues(item, upToMonth)
+  return {
+    volume: ytdPlan.volume - ytdReal.volume,
+    amount: ytdPlan.amount - ytdReal.amount
+  }
+}
+
+// ============ PROGRESS PERCENTAGE FUNCTIONS ============
+
+// Get physical progress % for a specific month (Realization / Plan * 100)
+function getMonthPhysicalProgress(item: BudgetItem, month: number): number {
+  const plan = getMonthPlan(item, month)
+  const real = getMonthRealization(item, month)
+  if (plan.planned_volume === 0) return 0
+  return Math.min(100, (real.realized_volume / plan.planned_volume) * 100)
+}
+
+// Get financial progress % for a specific month (Realization / Plan * 100)
+function getMonthFinancialProgress(item: BudgetItem, month: number): number {
+  const plan = getMonthPlan(item, month)
+  const real = getMonthRealization(item, month)
+  if (plan.planned_amount === 0) return 0
+  return Math.min(100, (real.realized_amount / plan.planned_amount) * 100)
+}
+
+// Get progress status color
+function getProgressStatus(percent: number): 'success' | 'warning' | 'error' | 'default' {
+  if (percent >= 100) return 'success'
+  if (percent >= 75) return 'warning'
+  if (percent >= 50) return 'default'
+  return 'error'
+}
+
 // ============ DATA FETCHING ============
 
 async function fetchSubActivities() {
@@ -483,11 +531,28 @@ async function saveAllRealizations() {
 }
 
 function getMonthPlan(item: BudgetItem, month: number): MonthlyPlanData {
-  return item.monthly_plans?.[month] || { planned_volume: 0, planned_amount: 0 }
+  const plan = item.monthly_plans?.[month]
+  if (plan) {
+    return {
+      id: plan.id,
+      planned_volume: Number(plan.planned_volume) || 0,
+      planned_amount: Number(plan.planned_amount) || 0
+    }
+  }
+  return { planned_volume: 0, planned_amount: 0 }
 }
 
 function getMonthRealization(item: BudgetItem, month: number): RealizationData {
-  return item.monthly_realizations?.[month] || { realized_volume: 0, realized_amount: 0 }
+  const real = item.monthly_realizations?.[month]
+  if (real) {
+    return {
+      id: real.id,
+      realized_volume: Number(real.realized_volume) || 0,
+      realized_amount: Number(real.realized_amount) || 0,
+      status: real.status
+    }
+  }
+  return { realized_volume: 0, realized_amount: 0 }
 }
 
 // ============ TOTALS ============
@@ -503,6 +568,14 @@ const monthlyTotals = computed(() => {
     realizedAmount: number
     ytdRealizedVolume: number
     ytdRealizedAmount: number
+    deviationVolume: number
+    deviationAmount: number
+    ytdDeviationVolume: number
+    ytdDeviationAmount: number
+    physicalProgress: number
+    financialProgress: number
+    ytdPhysicalProgress: number
+    ytdFinancialProgress: number
   }> = {}
 
   let cumPlannedVolume = 0
@@ -534,6 +607,18 @@ const monthlyTotals = computed(() => {
     cumRealizedVolume += monthRealizedVolume
     cumRealizedAmount += monthRealizedAmount
 
+    // Calculate deviations
+    const deviationVolume = monthPlannedVolume - monthRealizedVolume
+    const deviationAmount = monthPlannedAmount - monthRealizedAmount
+    const ytdDeviationVolume = cumPlannedVolume - cumRealizedVolume
+    const ytdDeviationAmount = cumPlannedAmount - cumRealizedAmount
+
+    // Calculate progress percentages
+    const physicalProgress = monthPlannedVolume > 0 ? (monthRealizedVolume / monthPlannedVolume) * 100 : 0
+    const financialProgress = monthPlannedAmount > 0 ? (monthRealizedAmount / monthPlannedAmount) * 100 : 0
+    const ytdPhysicalProgress = cumPlannedVolume > 0 ? (cumRealizedVolume / cumPlannedVolume) * 100 : 0
+    const ytdFinancialProgress = cumPlannedAmount > 0 ? (cumRealizedAmount / cumPlannedAmount) * 100 : 0
+
     totals[month.value] = {
       plannedVolume: monthPlannedVolume,
       plannedAmount: monthPlannedAmount,
@@ -542,7 +627,15 @@ const monthlyTotals = computed(() => {
       realizedVolume: monthRealizedVolume,
       realizedAmount: monthRealizedAmount,
       ytdRealizedVolume: cumRealizedVolume,
-      ytdRealizedAmount: cumRealizedAmount
+      ytdRealizedAmount: cumRealizedAmount,
+      deviationVolume,
+      deviationAmount,
+      ytdDeviationVolume,
+      ytdDeviationAmount,
+      physicalProgress,
+      financialProgress,
+      ytdPhysicalProgress,
+      ytdFinancialProgress
     }
   }
 
@@ -554,18 +647,43 @@ const grandTotal = computed(() => {
   let totalBudget = 0
   let totalPlanned = 0
   let totalRealized = 0
+  let totalVolume = 0
+  let totalRealizedVolume = 0
+  let totalPlannedVolume = 0
 
   for (const item of editableItems.value) {
     totalBudget += Number(item.total_budget) || 0
+    totalVolume += Number(item.volume) || 0
     totalPlanned += getTotalPlannedAmount(item)
     totalRealized += getTotalRealizedAmount(item)
+    totalRealizedVolume += getTotalRealizedVolume(item)
+    // Sum up all planned volumes
+    for (let m = 1; m <= 12; m++) {
+      const plan = item.monthly_plans?.[m]
+      if (plan) {
+        totalPlannedVolume += Number(plan.planned_volume) || 0
+      }
+    }
   }
+
+  const physicalProgress = totalVolume > 0 ? (totalRealizedVolume / totalVolume) * 100 : 0
+  const financialProgress = totalBudget > 0 ? (totalRealized / totalBudget) * 100 : 0
+  const planVsRealPhysical = totalPlannedVolume > 0 ? (totalRealizedVolume / totalPlannedVolume) * 100 : 0
+  const planVsRealFinancial = totalPlanned > 0 ? (totalRealized / totalPlanned) * 100 : 0
 
   return {
     budget: totalBudget,
     planned: totalPlanned,
     realized: totalRealized,
-    remaining: totalBudget - totalRealized
+    remaining: totalBudget - totalRealized,
+    totalVolume,
+    totalRealizedVolume,
+    totalPlannedVolume,
+    physicalProgress,
+    financialProgress,
+    planVsRealPhysical,
+    planVsRealFinancial,
+    deviation: totalPlanned - totalRealized
   }
 })
 
@@ -647,6 +765,104 @@ onMounted(() => {
       </div>
     </NCard>
 
+    <!-- Summary Progress Card -->
+    <NCard v-if="selectedSubActivityId && editableItems.length > 0" class="mb-6 summary-card">
+      <template #header>
+        <div class="flex items-center gap-2">
+          <NIcon size="20" color="#0369a1"><TrendingUpOutline /></NIcon>
+          <span class="font-bold">Ringkasan Progress Realisasi</span>
+        </div>
+      </template>
+      <NGrid :cols="4" :x-gap="16" :y-gap="16">
+        <!-- Physical Progress -->
+        <NGridItem>
+          <div class="progress-stat-card physical">
+            <div class="stat-header">
+              <NIcon size="24"><CubeOutline /></NIcon>
+              <span>Progress Fisik</span>
+            </div>
+            <div class="stat-value">{{ grandTotal.physicalProgress.toFixed(1) }}%</div>
+            <NProgress
+              type="line"
+              :percentage="grandTotal.physicalProgress"
+              :status="getProgressStatus(grandTotal.physicalProgress)"
+              :height="8"
+            />
+            <div class="stat-detail">
+              <span>{{ grandTotal.totalRealizedVolume.toFixed(2) }}</span>
+              <span class="divider">/</span>
+              <span>{{ grandTotal.totalVolume.toFixed(2) }}</span>
+            </div>
+          </div>
+        </NGridItem>
+
+        <!-- Financial Progress -->
+        <NGridItem>
+          <div class="progress-stat-card financial">
+            <div class="stat-header">
+              <NIcon size="24"><WalletOutline /></NIcon>
+              <span>Progress Keuangan</span>
+            </div>
+            <div class="stat-value">{{ grandTotal.financialProgress.toFixed(1) }}%</div>
+            <NProgress
+              type="line"
+              :percentage="grandTotal.financialProgress"
+              :status="getProgressStatus(grandTotal.financialProgress)"
+              :height="8"
+            />
+            <div class="stat-detail">
+              <span>{{ formatCurrency(grandTotal.realized) }}</span>
+              <span class="divider">/</span>
+              <span>{{ formatCurrency(grandTotal.budget) }}</span>
+            </div>
+          </div>
+        </NGridItem>
+
+        <!-- Plan vs Realization -->
+        <NGridItem>
+          <div class="progress-stat-card plan-vs-real">
+            <div class="stat-header">
+              <NIcon size="24"><TrendingUpOutline /></NIcon>
+              <span>Realisasi vs Rencana</span>
+            </div>
+            <div class="stat-value">{{ grandTotal.planVsRealFinancial.toFixed(1) }}%</div>
+            <NProgress
+              type="line"
+              :percentage="Math.min(100, grandTotal.planVsRealFinancial)"
+              :status="grandTotal.planVsRealFinancial >= 100 ? 'success' : grandTotal.planVsRealFinancial >= 75 ? 'warning' : 'error'"
+              :height="8"
+            />
+            <div class="stat-detail">
+              <span>{{ formatCurrency(grandTotal.realized) }}</span>
+              <span class="divider">/</span>
+              <span>{{ formatCurrency(grandTotal.planned) }}</span>
+            </div>
+          </div>
+        </NGridItem>
+
+        <!-- Deviation -->
+        <NGridItem>
+          <div class="progress-stat-card deviation" :class="{ negative: grandTotal.deviation < 0 }">
+            <div class="stat-header">
+              <NIcon size="24"><TrendingDownOutline /></NIcon>
+              <span>Deviasi (Rencana - Realisasi)</span>
+            </div>
+            <div class="stat-value" :class="{ positive: grandTotal.deviation > 0, negative: grandTotal.deviation < 0 }">
+              {{ grandTotal.deviation >= 0 ? '+' : '' }}{{ formatCurrency(grandTotal.deviation) }}
+            </div>
+            <div class="deviation-status">
+              <NTag v-if="grandTotal.deviation > 0" type="warning" size="small">Under-realized</NTag>
+              <NTag v-else-if="grandTotal.deviation < 0" type="error" size="small">Over-realized</NTag>
+              <NTag v-else type="success" size="small">On Target</NTag>
+            </div>
+            <div class="stat-detail">
+              <span>Sisa Anggaran: {{ formatCurrency(grandTotal.remaining) }}</span>
+            </div>
+          </div>
+        </NGridItem>
+      </NGrid>
+    </NCard>
+
     <!-- Loading State -->
     <div v-if="loading" class="flex justify-center py-12">
       <NSpin size="large" />
@@ -686,17 +902,19 @@ onMounted(() => {
               <th rowspan="3" class="col-code sticky-col sticky-left-0">Kode Rekening</th>
               <th rowspan="3" class="col-uraian sticky-col sticky-left-1">Uraian</th>
               <th colspan="6" rowspan="2" class="col-header-group">Rincian DPA</th>
-              <!-- Per month headers -->
+              <!-- Per month headers: Rencana(2/4) + Realisasi(2/4) + Deviasi(2/4) + Progress(2) -->
               <template v-for="month in months" :key="`header-${month.value}`">
-                <th :colspan="month.value === 1 ? 4 : 8" class="col-month-header">{{ month.fullLabel }}</th>
+                <th :colspan="month.value === 1 ? 8 : 14" class="col-month-header">{{ month.fullLabel }}</th>
               </template>
               <th colspan="2" rowspan="2" class="col-sisa-header">SISA</th>
             </tr>
-            <!-- Row 2: Rencana / Realisasi sub-headers -->
+            <!-- Row 2: Rencana / Realisasi / DEV / Progress sub-headers -->
             <tr>
               <template v-for="month in months" :key="`subheader-${month.value}`">
                 <th :colspan="month.value === 1 ? 2 : 4" class="col-subheader col-rencana">Rencana</th>
                 <th :colspan="month.value === 1 ? 2 : 4" class="col-subheader col-realisasi">Realisasi</th>
+                <th :colspan="month.value === 1 ? 2 : 4" class="col-subheader col-deviation">Deviasi</th>
+                <th colspan="2" class="col-subheader col-progress">Progress %</th>
               </template>
             </tr>
             <!-- Row 3: Column labels -->
@@ -723,6 +941,16 @@ onMounted(() => {
                   <th class="col-input col-realisasi col-ytd">s/d Vol</th>
                   <th class="col-input col-realisasi col-ytd">s/d Jml</th>
                 </template>
+                <!-- Deviasi columns -->
+                <th class="col-input col-deviation">Vol</th>
+                <th class="col-input col-deviation">Jml</th>
+                <template v-if="month.value > 1">
+                  <th class="col-input col-deviation col-ytd">s/d Vol</th>
+                  <th class="col-input col-deviation col-ytd">s/d Jml</th>
+                </template>
+                <!-- Progress columns -->
+                <th class="col-input col-progress">Fisik</th>
+                <th class="col-input col-progress">Keu</th>
               </template>
               <!-- SISA columns -->
               <th class="col-sisa-final">Vol</th>
@@ -861,6 +1089,44 @@ onMounted(() => {
                     {{ formatCurrency(getYtdRealizedValues(item, month.value).amount) }}
                   </td>
                 </template>
+
+                <!-- Deviasi columns (calculated) -->
+                <td class="col-input col-deviation col-readonly" :class="{ 'col-negative': getMonthDeviation(item, month.value).volume < 0, 'col-positive': getMonthDeviation(item, month.value).volume > 0 }">
+                  {{ getMonthDeviation(item, month.value).volume.toFixed(2) }}
+                </td>
+                <td class="col-input col-deviation col-readonly" :class="{ 'col-negative': getMonthDeviation(item, month.value).amount < 0, 'col-positive': getMonthDeviation(item, month.value).amount > 0 }">
+                  {{ formatCurrency(getMonthDeviation(item, month.value).amount) }}
+                </td>
+                <template v-if="month.value > 1">
+                  <td class="col-input col-deviation col-ytd col-readonly" :class="{ 'col-negative': getYtdDeviation(item, month.value).volume < 0, 'col-positive': getYtdDeviation(item, month.value).volume > 0 }">
+                    {{ getYtdDeviation(item, month.value).volume.toFixed(2) }}
+                  </td>
+                  <td class="col-input col-deviation col-ytd col-readonly" :class="{ 'col-negative': getYtdDeviation(item, month.value).amount < 0, 'col-positive': getYtdDeviation(item, month.value).amount > 0 }">
+                    {{ formatCurrency(getYtdDeviation(item, month.value).amount) }}
+                  </td>
+                </template>
+
+                <!-- Progress columns -->
+                <td class="col-input col-progress col-readonly">
+                  <NTooltip>
+                    <template #trigger>
+                      <span :class="getProgressStatus(getMonthPhysicalProgress(item, month.value))">
+                        {{ getMonthPhysicalProgress(item, month.value).toFixed(1) }}%
+                      </span>
+                    </template>
+                    <span>Progress Fisik: {{ getMonthRealization(item, month.value).realized_volume.toFixed(2) }} / {{ getMonthPlan(item, month.value).planned_volume.toFixed(2) }}</span>
+                  </NTooltip>
+                </td>
+                <td class="col-input col-progress col-readonly">
+                  <NTooltip>
+                    <template #trigger>
+                      <span :class="getProgressStatus(getMonthFinancialProgress(item, month.value))">
+                        {{ getMonthFinancialProgress(item, month.value).toFixed(1) }}%
+                      </span>
+                    </template>
+                    <span>Progress Keuangan: {{ formatCurrency(getMonthRealization(item, month.value).realized_amount) }} / {{ formatCurrency(getMonthPlan(item, month.value).planned_amount) }}</span>
+                  </NTooltip>
+                </td>
               </template>
 
               <!-- SISA columns -->
@@ -908,6 +1174,32 @@ onMounted(() => {
                     {{ formatCurrency(monthlyTotals[month.value]?.ytdRealizedAmount || 0) }}
                   </td>
                 </template>
+                <!-- Deviasi totals -->
+                <td class="col-input col-deviation font-medium" :class="{ 'col-negative': (monthlyTotals[month.value]?.deviationVolume || 0) < 0, 'col-positive': (monthlyTotals[month.value]?.deviationVolume || 0) > 0 }">
+                  {{ (monthlyTotals[month.value]?.deviationVolume || 0).toFixed(2) }}
+                </td>
+                <td class="col-input col-deviation font-medium" :class="{ 'col-negative': (monthlyTotals[month.value]?.deviationAmount || 0) < 0, 'col-positive': (monthlyTotals[month.value]?.deviationAmount || 0) > 0 }">
+                  {{ formatCurrency(monthlyTotals[month.value]?.deviationAmount || 0) }}
+                </td>
+                <template v-if="month.value > 1">
+                  <td class="col-input col-deviation col-ytd font-medium" :class="{ 'col-negative': (monthlyTotals[month.value]?.ytdDeviationVolume || 0) < 0, 'col-positive': (monthlyTotals[month.value]?.ytdDeviationVolume || 0) > 0 }">
+                    {{ (monthlyTotals[month.value]?.ytdDeviationVolume || 0).toFixed(2) }}
+                  </td>
+                  <td class="col-input col-deviation col-ytd font-medium" :class="{ 'col-negative': (monthlyTotals[month.value]?.ytdDeviationAmount || 0) < 0, 'col-positive': (monthlyTotals[month.value]?.ytdDeviationAmount || 0) > 0 }">
+                    {{ formatCurrency(monthlyTotals[month.value]?.ytdDeviationAmount || 0) }}
+                  </td>
+                </template>
+                <!-- Progress totals -->
+                <td class="col-input col-progress font-medium">
+                  <span :class="getProgressStatus(monthlyTotals[month.value]?.physicalProgress || 0)">
+                    {{ (monthlyTotals[month.value]?.physicalProgress || 0).toFixed(1) }}%
+                  </span>
+                </td>
+                <td class="col-input col-progress font-medium">
+                  <span :class="getProgressStatus(monthlyTotals[month.value]?.financialProgress || 0)">
+                    {{ (monthlyTotals[month.value]?.financialProgress || 0).toFixed(1) }}%
+                  </span>
+                </td>
               </template>
               <!-- SISA totals -->
               <td class="col-sisa-final font-bold">-</td>
@@ -923,10 +1215,40 @@ onMounted(() => {
 <style scoped>
 .realization-grid-wrapper {
   overflow-x: auto;
+  overflow-y: auto;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   max-height: 70vh;
-  overflow-y: auto;
+  scroll-behavior: smooth;
+  /* Shadow indicators for scroll */
+  background:
+    linear-gradient(to right, white 30%, rgba(255,255,255,0)),
+    linear-gradient(to right, rgba(255,255,255,0), white 70%) 100% 0,
+    linear-gradient(to right, rgba(0,0,0,0.1), rgba(0,0,0,0)),
+    linear-gradient(to right, rgba(0,0,0,0), rgba(0,0,0,0.1)) 100% 0;
+  background-repeat: no-repeat;
+  background-size: 40px 100%, 40px 100%, 14px 100%, 14px 100%;
+  background-attachment: local, local, scroll, scroll;
+}
+
+/* Custom scrollbar */
+.realization-grid-wrapper::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+
+.realization-grid-wrapper::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 5px;
+}
+
+.realization-grid-wrapper::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 5px;
+}
+
+.realization-grid-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
 }
 
 .realization-grid {
@@ -1123,6 +1445,64 @@ onMounted(() => {
   color: #b91c1c !important;
 }
 
+.realization-grid .col-positive {
+  background: #d1fae5 !important;
+  color: #065f46 !important;
+}
+
+/* Deviation column styles */
+.realization-grid .col-deviation {
+  background: #f3e8ff !important;
+  color: #6b21a8;
+}
+
+.realization-grid thead .col-deviation {
+  background: #7c3aed !important;
+  color: white;
+}
+
+.realization-grid .col-deviation.col-ytd {
+  background: #ede9fe !important;
+  color: #5b21b6;
+}
+
+.realization-grid thead .col-deviation.col-ytd {
+  background: #5b21b6 !important;
+  color: white;
+}
+
+/* Progress column styles */
+.realization-grid .col-progress {
+  background: #ecfdf5 !important;
+  color: #047857;
+  text-align: center !important;
+}
+
+.realization-grid thead .col-progress {
+  background: #059669 !important;
+  color: white;
+}
+
+.realization-grid .col-progress .success {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.realization-grid .col-progress .warning {
+  color: #d97706;
+  font-weight: 600;
+}
+
+.realization-grid .col-progress .error {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.realization-grid .col-progress .default {
+  color: #6b7280;
+  font-weight: 500;
+}
+
 .realization-grid .col-input {
   width: 55px;
   padding: 2px 3px;
@@ -1206,5 +1586,83 @@ onMounted(() => {
 
 .realization-grid tbody tr:nth-child(even) .sticky-col {
   background: #fafafa;
+}
+
+/* Summary Progress Card Styles */
+.summary-card {
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+}
+
+.progress-stat-card {
+  padding: 16px;
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.progress-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.progress-stat-card.physical {
+  border-left: 4px solid #0ea5e9;
+}
+
+.progress-stat-card.financial {
+  border-left: 4px solid #10b981;
+}
+
+.progress-stat-card.plan-vs-real {
+  border-left: 4px solid #f59e0b;
+}
+
+.progress-stat-card.deviation {
+  border-left: 4px solid #8b5cf6;
+}
+
+.progress-stat-card.deviation.negative {
+  border-left-color: #ef4444;
+}
+
+.stat-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 8px;
+}
+
+.stat-value.positive {
+  color: #16a34a;
+}
+
+.stat-value.negative {
+  color: #dc2626;
+}
+
+.stat-detail {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 8px;
+}
+
+.stat-detail .divider {
+  margin: 0 4px;
+  color: #cbd5e1;
+}
+
+.deviation-status {
+  margin-top: 8px;
 }
 </style>

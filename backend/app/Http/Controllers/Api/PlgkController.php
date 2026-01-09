@@ -34,20 +34,23 @@ class PlgkController extends Controller
         $formattedData = [
             'sub_activity' => [
                 'id' => $subActivity->id,
-                'category' => $subActivity->category,
+                'code' => $subActivity->code,
                 'name' => $subActivity->name,
-                'budget_current_year' => $subActivity->budget_current_year,
+                'total_budget' => $subActivity->total_budget,
+                'nomor_dpa' => $subActivity->nomor_dpa,
             ],
             'year' => $year,
             'budget_items' => $subActivity->budgetItems->map(function ($item) {
                 return [
                     'id' => $item->id,
-                    'account_code' => $item->account_code,
-                    'description' => $item->description,
+                    'code' => $item->code,
+                    'name' => $item->name,
+                    'group_name' => $item->group_name,
                     'unit' => $item->unit,
                     'unit_price' => $item->unit_price,
-                    'total_volume' => $item->total_volume,
-                    'total_amount' => $item->total_amount,
+                    'volume' => $item->volume,
+                    'total_budget' => $item->total_budget,
+                    'is_detail_code' => $item->is_detail_code,
                     'monthly_plans' => $item->monthlyPlans->map(function ($plan) {
                         return [
                             'id' => $plan->id,
@@ -59,7 +62,7 @@ class PlgkController extends Controller
                 ];
             }),
             'summary' => [
-                'total_budget' => $subActivity->budgetItems->sum('total_amount'),
+                'total_budget' => $subActivity->budgetItems->sum('total_budget'),
                 'total_planned' => $subActivity->budgetItems->sum(function ($item) {
                     return $item->monthlyPlans->sum('planned_amount');
                 }),

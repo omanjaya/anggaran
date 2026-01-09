@@ -8,19 +8,22 @@ import api from '@/services/api'
 
 interface SubActivity {
   id: number
-  category: string
+  code: string
   name: string
-  budget_current_year: number
+  total_budget: number
+  nomor_dpa?: string
 }
 
 interface BudgetItem {
   id: number
-  account_code: string
-  description: string
+  code: string
+  name: string
+  group_name?: string
   unit: string
   unit_price: number
-  total_volume: number
-  total_amount: number
+  volume: number
+  total_budget: number
+  is_detail_code?: boolean
   monthly_plans?: MonthlyPlan[]
 }
 
@@ -77,7 +80,7 @@ const monthNames = [
 ]
 
 const subActivityOptions = computed(() =>
-  subActivities.value.map((sa) => ({ label: `${sa.category} - ${sa.name}`, value: sa.id }))
+  subActivities.value.map((sa) => ({ label: `${sa.code} - ${sa.name}`, value: sa.id }))
 )
 
 const yearOptions = computed(() =>
@@ -248,7 +251,7 @@ onMounted(async () => {
     <template v-else-if="plgkData">
       <!-- Summary Cards -->
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <StatCard label="Total Anggaran" :value="formatCurrency(plgkData.sub_activity.budget_current_year)" />
+        <StatCard label="Total Anggaran" :value="formatCurrency(plgkData.sub_activity.total_budget)" />
         <StatCard label="Total Terencana" :value="formatCurrency(plgkData.summary.total_planned)" variant="success" />
         <PageCard>
           <p class="text-sm font-medium text-gray-600">Status</p>
@@ -259,7 +262,7 @@ onMounted(async () => {
       </div>
 
       <!-- PLGK Table -->
-      <PageCard :title="`PLGK ${plgkData.sub_activity.category} - Tahun ${plgkData.year}`" :padding="false">
+      <PageCard :title="`PLGK ${plgkData.sub_activity.code} - Tahun ${plgkData.year}`" :padding="false">
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
             <thead class="bg-gray-50">
@@ -279,10 +282,10 @@ onMounted(async () => {
               <template v-for="item in plgkData.budget_items" :key="item.id">
                 <tr class="hover:bg-gray-50">
                   <td class="px-3 py-2 sticky left-0 bg-white z-10">
-                    <div class="font-mono text-xs text-gray-500">{{ item.account_code }}</div>
-                    <div class="text-sm">{{ item.description }}</div>
+                    <div class="font-mono text-xs text-gray-500">{{ item.code }}</div>
+                    <div class="text-sm">{{ item.name }}</div>
                     <div class="text-xs text-gray-500">
-                      {{ item.total_volume }} {{ item.unit }} x {{ formatCurrency(item.unit_price) }}
+                      {{ item.volume }} {{ item.unit }} x {{ formatCurrency(item.unit_price) }}
                     </div>
                   </td>
                   <td
@@ -327,7 +330,7 @@ onMounted(async () => {
     </PageCard>
 
     <!-- Preview Modal -->
-    <NModal v-model:show="showPreview" preset="card" :title="`Preview PLGK - ${previewData?.sub_activity.category}`" style="width: 90vw; max-width: 1200px">
+    <NModal v-model:show="showPreview" preset="card" :title="`Preview PLGK - ${previewData?.sub_activity.code}`" style="width: 90vw; max-width: 1200px">
       <!-- Preview Summary -->
       <div class="mb-4 p-4 bg-blue-50 rounded-lg">
         <div class="grid grid-cols-3 gap-4 text-sm">
@@ -364,8 +367,8 @@ onMounted(async () => {
           <tbody class="divide-y">
             <tr v-for="item in previewData?.items" :key="item.budget_item.id" class="hover:bg-gray-50">
               <td class="px-3 py-2">
-                <div class="font-mono text-xs text-gray-500">{{ item.budget_item.account_code }}</div>
-                <div class="text-sm">{{ item.budget_item.description }}</div>
+                <div class="font-mono text-xs text-gray-500">{{ item.budget_item.code }}</div>
+                <div class="text-sm">{{ item.budget_item.name }}</div>
               </td>
               <td
                 v-for="plan in item.monthly_plans"

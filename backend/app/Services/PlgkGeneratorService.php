@@ -69,12 +69,12 @@ class PlgkGeneratorService
             ->where('year', $year)
             ->delete();
 
-        $monthlyVolume = round($budgetItem->total_volume / 12, 2);
-        $monthlyAmount = round($budgetItem->total_amount / 12, 2);
+        $monthlyVolume = round($budgetItem->volume / 12, 2);
+        $monthlyAmount = round($budgetItem->total_budget / 12, 2);
 
         // Handle remainder for last month
-        $volumeRemainder = $budgetItem->total_volume - ($monthlyVolume * 11);
-        $amountRemainder = $budgetItem->total_amount - ($monthlyAmount * 11);
+        $volumeRemainder = $budgetItem->volume - ($monthlyVolume * 11);
+        $amountRemainder = $budgetItem->total_budget - ($monthlyAmount * 11);
 
         $plans = collect();
 
@@ -109,13 +109,13 @@ class PlgkGeneratorService
         $totalAmount = array_sum(array_column($allocations, 'amount'));
 
         // Allow small tolerance for rounding
-        $volumeDiff = abs($totalVolume - $budgetItem->total_volume);
-        $amountDiff = abs($totalAmount - $budgetItem->total_amount);
+        $volumeDiff = abs($totalVolume - $budgetItem->volume);
+        $amountDiff = abs($totalAmount - $budgetItem->total_budget);
 
         if ($volumeDiff > 0.01 || $amountDiff > 1) {
             throw new \InvalidArgumentException(
                 "Custom allocations sum ({$totalVolume}, {$totalAmount}) doesn't match budget item " .
-                "({$budgetItem->total_volume}, {$budgetItem->total_amount})"
+                "({$budgetItem->volume}, {$budgetItem->total_budget})"
             );
         }
 
@@ -177,11 +177,11 @@ class PlgkGeneratorService
 
             if ($isLast) {
                 // Handle remainder
-                $amount = $budgetItem->total_amount - $allocatedAmount;
-                $volume = $budgetItem->total_volume - $allocatedVolume;
+                $amount = $budgetItem->total_budget - $allocatedAmount;
+                $volume = $budgetItem->volume - $allocatedVolume;
             } else {
-                $amount = round($budgetItem->total_amount * $percentage, 2);
-                $volume = round($budgetItem->total_volume * $percentage, 2);
+                $amount = round($budgetItem->total_budget * $percentage, 2);
+                $volume = round($budgetItem->volume * $percentage, 2);
                 $allocatedAmount += $amount;
                 $allocatedVolume += $volume;
             }
@@ -217,10 +217,10 @@ class PlgkGeneratorService
             $monthlyData = [];
 
             if ($method === self::METHOD_EQUAL) {
-                $monthlyVolume = round($budgetItem->total_volume / 12, 2);
-                $monthlyAmount = round($budgetItem->total_amount / 12, 2);
-                $volumeRemainder = $budgetItem->total_volume - ($monthlyVolume * 11);
-                $amountRemainder = $budgetItem->total_amount - ($monthlyAmount * 11);
+                $monthlyVolume = round($budgetItem->volume / 12, 2);
+                $monthlyAmount = round($budgetItem->total_budget / 12, 2);
+                $volumeRemainder = $budgetItem->volume - ($monthlyVolume * 11);
+                $amountRemainder = $budgetItem->total_budget - ($monthlyAmount * 11);
 
                 for ($month = 1; $month <= 12; $month++) {
                     $isLast = $month === 12;
@@ -238,12 +238,12 @@ class PlgkGeneratorService
             $preview[] = [
                 'budget_item' => [
                     'id' => $budgetItem->id,
-                    'account_code' => $budgetItem->account_code,
-                    'description' => $budgetItem->description,
+                    'code' => $budgetItem->code,
+                    'name' => $budgetItem->name,
                     'unit' => $budgetItem->unit,
-                    'total_volume' => $budgetItem->total_volume,
+                    'volume' => $budgetItem->volume,
                     'unit_price' => $budgetItem->unit_price,
-                    'total_amount' => $budgetItem->total_amount,
+                    'total_budget' => $budgetItem->total_budget,
                 ],
                 'monthly_plans' => $monthlyData,
             ];
@@ -252,16 +252,16 @@ class PlgkGeneratorService
         return [
             'sub_activity' => [
                 'id' => $subActivity->id,
-                'category' => $subActivity->category,
+                'code' => $subActivity->code,
                 'name' => $subActivity->name,
-                'budget_current_year' => $subActivity->budget_current_year,
+                'total_budget' => $subActivity->total_budget,
             ],
             'year' => $year,
             'method' => $method,
             'items' => $preview,
             'summary' => [
                 'total_items' => count($preview),
-                'total_budget' => $budgetItems->sum('total_amount'),
+                'total_budget' => $budgetItems->sum('total_budget'),
             ],
         ];
     }
@@ -315,19 +315,19 @@ class PlgkGeneratorService
             }
 
             // Check if totals match
-            if (abs($plannedTotal - $budgetItem->total_amount) > 1) {
+            if (abs($plannedTotal - $budgetItem->total_budget) > 1) {
                 $issues[] = [
                     'budget_item_id' => $budgetItem->id,
                     'type' => 'amount_mismatch',
-                    'message' => "Planned total ({$plannedTotal}) doesn't match budget ({$budgetItem->total_amount})",
+                    'message' => "Planned total ({$plannedTotal}) doesn't match budget ({$budgetItem->total_budget})",
                 ];
             }
 
-            if (abs($plannedVolume - $budgetItem->total_volume) > 0.01) {
+            if (abs($plannedVolume - $budgetItem->volume) > 0.01) {
                 $issues[] = [
                     'budget_item_id' => $budgetItem->id,
                     'type' => 'volume_mismatch',
-                    'message' => "Planned volume ({$plannedVolume}) doesn't match budget ({$budgetItem->total_volume})",
+                    'message' => "Planned volume ({$plannedVolume}) doesn't match budget ({$budgetItem->volume})",
                 ];
             }
         }

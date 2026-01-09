@@ -825,10 +825,40 @@ onMounted(() => {
 <style scoped>
 .planning-grid-wrapper {
   overflow-x: auto;
+  overflow-y: auto;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   max-height: 70vh;
-  overflow-y: auto;
+  scroll-behavior: smooth;
+  /* Shadow indicators for scroll */
+  background:
+    linear-gradient(to right, white 30%, rgba(255,255,255,0)),
+    linear-gradient(to right, rgba(255,255,255,0), white 70%) 100% 0,
+    linear-gradient(to right, rgba(0,0,0,0.1), rgba(0,0,0,0)),
+    linear-gradient(to right, rgba(0,0,0,0), rgba(0,0,0,0.1)) 100% 0;
+  background-repeat: no-repeat;
+  background-size: 40px 100%, 40px 100%, 14px 100%, 14px 100%;
+  background-attachment: local, local, scroll, scroll;
+}
+
+/* Custom scrollbar */
+.planning-grid-wrapper::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+
+.planning-grid-wrapper::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 5px;
+}
+
+.planning-grid-wrapper::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 5px;
+}
+
+.planning-grid-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
 }
 
 .planning-grid {
