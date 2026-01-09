@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import {
-  NCard, NSelect, NSpin, NEmpty, NButton, NIcon, NTag,
-  NTable, NModal
+  NCard, NSelect, NSpin, NEmpty, NButton, NIcon, NTag, NModal
 } from 'naive-ui'
 import { EyeOutline } from '@vicons/ionicons5'
 import { useFormat } from '@/composables'
