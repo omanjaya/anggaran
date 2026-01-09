@@ -12,7 +12,7 @@ class BudgetItemController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $query = BudgetItem::with(['subActivity.activity.program']);
+        $query = BudgetItem::with(['subActivity.activity.program', 'details']);
 
         if ($request->has('search')) {
             $search = $request->search;
@@ -79,7 +79,7 @@ class BudgetItemController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => $budgetItem->load(['subActivity.activity.program', 'monthlyPlans']),
+            'data' => $budgetItem->load(['subActivity.activity.program', 'monthlyPlans', 'details']),
         ]);
     }
 
