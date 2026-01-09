@@ -87,11 +87,6 @@ const monthOptions = [
   { value: 12, label: 'Desember' },
 ]
 
-// Sorted budget items for display
-const sortedBudgetItems = computed(() => {
-  return [...budgetItems.value].sort((a, b) => a.code.localeCompare(b.code))
-})
-
 // Sub activity options for dropdown
 const subActivityOptions = computed(() =>
   subActivities.value.map(sa => ({
@@ -100,7 +95,52 @@ const subActivityOptions = computed(() =>
   }))
 )
 
-// Calculate totals
+// Flatten budget items with their details for display
+const flattenedItems = computed(() => {
+  const items: any[] = []
+
+  // Sort by code
+  const sorted = [...budgetItems.value].sort((a, b) => a.code.localeCompare(b.code))
+
+  for (const item of sorted) {
+    // Add the budget item row
+    items.push({
+      type: 'budget_item',
+      ...item
+    })
+
+    // If it's a detail code with details, add [ # ], [ - ], and spesifikasi rows
+    if (item.is_detail_code && item.details && item.details.length > 0) {
+      // Add [ # ] group row
+      items.push({
+        type: 'group_hash',
+        name: item.name,
+        group_name: item.group_name,
+        sumber_dana: item.sumber_dana,
+        total_budget: item.total_budget
+      })
+
+      // Add [ - ] sub-group row
+      items.push({
+        type: 'group_dash',
+        name: item.name,
+        total_budget: item.total_budget
+      })
+
+      // Add spesifikasi rows
+      for (const detail of item.details) {
+        items.push({
+          type: 'spesifikasi',
+          ...detail
+        })
+      }
+    }
+  }
+
+  return items
+})
+
+// Calculate totals from detail codes only
 const totals = computed(() => {
   const detailItems = budgetItems.value.filter(item => item.is_detail_code)
   return {
@@ -108,11 +148,6 @@ const totals = computed(() => {
     planned: detailItems.reduce((sum, item) => sum + Number(item.planned || 0), 0),
     realized: detailItems.reduce((sum, item) => sum + Number(item.realized || 0), 0),
   }
-})
-
-const overallPercentage = computed(() => {
-  if (totals.value.budget === 0) return 0
-  return (totals.value.realized / totals.value.budget) * 100
 })
 
 async function fetchSubActivities() {
@@ -135,7 +170,8 @@ async function fetchBudgetItems() {
     const params: Record<string, any> = {
       sub_activity_id: selectedSubActivityId.value,
       per_page: 500,
-      year: selectedYear.value
+      year: selectedYear.value,
+      with_details: true
     }
     if (selectedMonth.value) {
       params.month = selectedMonth.value
@@ -156,14 +192,13 @@ function onSubActivityChange(value: number | null) {
   fetchBudgetItems()
 }
 
-function getIndentStyle(item: BudgetItem) {
-  const level = item.level || 1
-  return { paddingLeft: `${(level - 1) * 16}px` }
-}
+function getRowClass(item: any) {
+  if (item.type === 'group_hash') return 'row-group-hash'
+  if (item.type === 'group_dash') return 'row-group-dash'
+  if (item.type === 'spesifikasi') return 'row-spesifikasi'
 
-function getRowClass(item: BudgetItem) {
   const level = item.level || 1
-  if (item.is_detail_code) return 'row-detail'
+  if (item.is_detail_code) return 'row-detail-code'
   if (level === 1) return 'row-level-1'
   if (level === 2) return 'row-level-2'
   if (level === 3) return 'row-level-3'
@@ -172,13 +207,8 @@ function getRowClass(item: BudgetItem) {
   return ''
 }
 
-function isParentLevel(item: BudgetItem) {
-  return !item.is_detail_code
-}
-
-function getRealizationPercentage(item: BudgetItem) {
-  if (!item.total_budget || item.total_budget === 0) return 0
-  return (Number(item.realized || 0) / Number(item.total_budget)) * 100
+function isParentLevel(item: any) {
+  return item.type === 'budget_item' && !item.is_detail_code
 }
 
 async function exportPdf() {
@@ -255,7 +285,7 @@ onMounted(() => {
     <!-- Header -->
     <div class="mb-6">
       <h1 class="text-2xl font-bold text-gray-800">Laporan Realisasi</h1>
-      <p class="text-gray-500 mt-1">Format Laporan Realisasi Fisik dan Keuangan</p>
+      <p class="text-gray-500 mt-1">Format DPA Rincian Belanja SKPD</p>
     </div>
 
     <!-- Filter Card -->
@@ -328,26 +358,6 @@ onMounted(() => {
       </div>
     </NCard>
 
-    <!-- Summary Cards -->
-    <div v-if="selectedSubActivityId && budgetItems.length > 0" class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-      <div class="bg-white p-4 rounded-lg border shadow-sm">
-        <div class="text-sm text-gray-500">Total Anggaran</div>
-        <div class="text-xl font-bold text-gray-800">{{ formatCurrency(totals.budget) }}</div>
-      </div>
-      <div class="bg-blue-50 p-4 rounded-lg border border-blue-200 shadow-sm">
-        <div class="text-sm text-blue-600">Total Rencana</div>
-        <div class="text-xl font-bold text-blue-700">{{ formatCurrency(totals.planned) }}</div>
-      </div>
-      <div class="bg-green-50 p-4 rounded-lg border border-green-200 shadow-sm">
-        <div class="text-sm text-green-600">Total Realisasi</div>
-        <div class="text-xl font-bold text-green-700">{{ formatCurrency(totals.realized) }}</div>
-      </div>
-      <div class="bg-amber-50 p-4 rounded-lg border border-amber-200 shadow-sm">
-        <div class="text-sm text-amber-600">Persentase Realisasi</div>
-        <div class="text-xl font-bold text-amber-700">{{ overallPercentage.toFixed(1) }}%</div>
-      </div>
-    </div>
-
     <!-- Loading State -->
     <div v-if="loading" class="flex justify-center py-12">
       <NSpin size="large" />
@@ -355,17 +365,20 @@ onMounted(() => {
 
     <!-- Empty State -->
     <NCard v-else-if="!selectedSubActivityId">
-      <NEmpty description="Pilih Sub Kegiatan untuk melihat laporan realisasi" />
+      <NEmpty description="Pilih Sub Kegiatan untuk melihat laporan" />
     </NCard>
 
     <NCard v-else-if="budgetItems.length === 0">
       <NEmpty description="Tidak ada data untuk Sub Kegiatan ini" />
     </NCard>
 
-    <!-- Budget Items Table - PDF Style -->
-    <NCard v-else title="Rincian Belanja" class="report-table-card">
-      <template #header-extra>
-        <NTag type="info">{{ budgetItems.length }} item</NTag>
+    <!-- DPA Table - PDF Style -->
+    <NCard v-else class="report-table-card">
+      <template #header>
+        <div class="flex items-center justify-between">
+          <span class="font-bold">Rincian Belanja</span>
+          <NTag type="info">{{ budgetItems.length }} item</NTag>
+        </div>
       </template>
 
       <div class="report-table-wrapper">
@@ -373,62 +386,71 @@ onMounted(() => {
           <thead>
             <tr>
               <th rowspan="2" class="col-code">Kode Rekening</th>
-              <th rowspan="2" class="col-name">Uraian</th>
-              <th rowspan="2" class="col-amount">Anggaran (Rp)</th>
-              <th colspan="2" class="col-header-group">Progres Fisik</th>
-              <th colspan="2" class="col-header-group">Progres Keuangan</th>
-              <th rowspan="2" class="col-amount">Saldo (Rp)</th>
+              <th rowspan="2" class="col-uraian">Uraian</th>
+              <th colspan="4" class="col-header-group">Rincian Perhitungan</th>
+              <th rowspan="2" class="col-jumlah">Jumlah<br>(Rp)</th>
             </tr>
             <tr>
-              <th class="col-percent">Target</th>
-              <th class="col-percent">Real</th>
-              <th class="col-amount-sm">Real (Rp)</th>
-              <th class="col-percent">%</th>
+              <th class="col-volume">Koefisien/<br>Volume</th>
+              <th class="col-satuan">Satuan</th>
+              <th class="col-harga">Harga</th>
+              <th class="col-ppn">PPN</th>
             </tr>
           </thead>
           <tbody>
-            <template v-for="item in sortedBudgetItems" :key="item.id">
-              <!-- Parent level row (levels 1-5) - merged style -->
+            <template v-for="(item, index) in flattenedItems" :key="index">
+              <!-- Parent level rows (1-5): Merged cells -->
               <tr v-if="isParentLevel(item)" :class="getRowClass(item)">
-                <td class="col-code">
-                  <div :style="getIndentStyle(item)">{{ item.code }}</div>
-                </td>
-                <td colspan="7" class="col-name-merged">
-                  <div class="item-name">{{ item.name }}</div>
-                </td>
+                <td class="col-code">{{ item.code }}</td>
+                <td colspan="5" class="col-uraian-merged">{{ item.name }}</td>
+                <td class="col-jumlah">{{ formatCurrency(item.total_budget) }}</td>
               </tr>
 
-              <!-- Detail level row (level 6) - full columns -->
-              <tr v-else :class="getRowClass(item)">
-                <td class="col-code">
-                  <div :style="getIndentStyle(item)">{{ item.code }}</div>
+              <!-- Detail code row (level 6) -->
+              <tr v-else-if="item.type === 'budget_item' && item.is_detail_code" :class="getRowClass(item)">
+                <td class="col-code">{{ item.code }}</td>
+                <td colspan="5" class="col-uraian-merged">{{ item.name }}</td>
+                <td class="col-jumlah">{{ formatCurrency(item.total_budget) }}</td>
+              </tr>
+
+              <!-- [ # ] Group row -->
+              <tr v-else-if="item.type === 'group_hash'" :class="getRowClass(item)">
+                <td class="col-code"></td>
+                <td colspan="5" class="col-uraian-group">
+                  <div>[ # ] {{ item.name }}</div>
+                  <div v-if="item.sumber_dana" class="sumber-dana">Sumber Dana: {{ item.sumber_dana }}</div>
                 </td>
-                <td class="col-name">
-                  <div class="item-name">{{ item.name }}</div>
-                  <div v-if="item.group_name" class="item-meta">[ # ] {{ item.group_name }}</div>
-                  <div v-if="item.sumber_dana" class="item-meta">Sumber Dana: {{ item.sumber_dana }}</div>
+                <td class="col-jumlah">{{ formatCurrency(item.total_budget) }}</td>
+              </tr>
+
+              <!-- [ - ] Sub-group row -->
+              <tr v-else-if="item.type === 'group_dash'" :class="getRowClass(item)">
+                <td class="col-code"></td>
+                <td colspan="5" class="col-uraian-group">[ - ] {{ item.name }}</td>
+                <td class="col-jumlah">{{ formatCurrency(item.total_budget) }}</td>
+              </tr>
+
+              <!-- Spesifikasi row - full columns -->
+              <tr v-else-if="item.type === 'spesifikasi'" :class="getRowClass(item)">
+                <td class="col-code"></td>
+                <td class="col-uraian-spec">
+                  <div>{{ item.description.split('\n')[0] }}</div>
+                  <div v-if="item.description.includes('Spesifikasi:')" class="spesifikasi-detail">
+                    Spesifikasi: {{ item.description.split('Spesifikasi:')[1]?.trim() || '' }}
+                  </div>
                 </td>
-                <td class="col-amount">{{ formatCurrency(item.total_budget) }}</td>
-                <td class="col-percent">{{ (item.physical_target || 0).toFixed(1) }}%</td>
-                <td class="col-percent" :class="(item.physical_progress || 0) >= (item.physical_target || 0) ? 'text-success' : 'text-warning'">
-                  {{ (item.physical_progress || 0).toFixed(1) }}%
-                </td>
-                <td class="col-amount-sm">{{ formatCurrency(item.realized || 0) }}</td>
-                <td class="col-percent" :class="getRealizationPercentage(item) >= 80 ? 'text-success' : 'text-warning'">
-                  {{ getRealizationPercentage(item).toFixed(1) }}%
-                </td>
-                <td class="col-amount">{{ formatCurrency((item.total_budget || 0) - (item.realized || 0)) }}</td>
+                <td class="col-volume">{{ item.volume }} {{ item.unit }}</td>
+                <td class="col-satuan">{{ item.unit }}</td>
+                <td class="col-harga">{{ formatCurrency(item.unit_price) }}</td>
+                <td class="col-ppn">0%</td>
+                <td class="col-jumlah">{{ formatCurrency(item.amount) }}</td>
               </tr>
             </template>
           </tbody>
           <tfoot>
             <tr>
-              <td colspan="2" class="text-center font-bold">TOTAL</td>
-              <td class="col-amount font-bold">{{ formatCurrency(totals.budget) }}</td>
-              <td colspan="2"></td>
-              <td class="col-amount-sm font-bold">{{ formatCurrency(totals.realized) }}</td>
-              <td class="col-percent font-bold">{{ overallPercentage.toFixed(1) }}%</td>
-              <td class="col-amount font-bold">{{ formatCurrency(totals.budget - totals.realized) }}</td>
+              <td colspan="6" class="text-right font-bold">Jumlah Anggaran Sub Kegiatan</td>
+              <td class="col-jumlah font-bold">{{ formatCurrency(totals.budget) }}</td>
             </tr>
           </tfoot>
         </table>
@@ -439,161 +461,160 @@ onMounted(() => {
 
 <style scoped>
 .report-table-wrapper {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  border: 1px solid #000;
   overflow-x: auto;
 }
 
 .report-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 12px;
   min-width: 900px;
 }
 
 .report-table thead {
-  background: #1e3a5f;
-  color: white;
+  background: #f3f4f6;
 }
 
 .report-table th {
-  padding: 10px 12px;
+  padding: 8px 10px;
   text-align: center;
   font-weight: 600;
-  border: 1px solid rgba(255,255,255,0.2);
-  white-space: nowrap;
+  border: 1px solid #000;
+  vertical-align: middle;
 }
 
 .report-table td {
-  padding: 8px 12px;
-  border: 1px solid #e5e7eb;
+  padding: 6px 10px;
+  border: 1px solid #000;
   vertical-align: top;
 }
 
 .report-table .col-code {
-  width: 160px;
-  font-family: 'Monaco', 'Menlo', monospace;
-  font-size: 12px;
+  width: 140px;
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
   white-space: nowrap;
   text-align: left;
 }
 
-.report-table .col-name {
-  min-width: 250px;
+.report-table .col-uraian {
+  min-width: 280px;
   text-align: left;
 }
 
-.report-table .col-name-merged {
+.report-table .col-uraian-merged {
   text-align: left;
-  background: inherit;
+  font-weight: 500;
 }
 
-.report-table .col-amount {
-  width: 130px;
-  text-align: right;
-  font-family: 'Monaco', 'Menlo', monospace;
-  font-size: 12px;
+.report-table .col-uraian-group {
+  text-align: left;
+  padding-left: 20px;
 }
 
-.report-table .col-amount-sm {
-  width: 110px;
-  text-align: right;
-  font-family: 'Monaco', 'Menlo', monospace;
-  font-size: 12px;
+.report-table .col-uraian-spec {
+  text-align: left;
+  padding-left: 40px;
 }
 
-.report-table .col-percent {
-  width: 60px;
+.report-table .col-volume {
+  width: 90px;
   text-align: center;
 }
 
-.report-table .col-header-group {
-  background: #2d4a6f;
+.report-table .col-satuan {
+  width: 70px;
+  text-align: center;
 }
 
-.item-name {
+.report-table .col-harga {
+  width: 100px;
+  text-align: right;
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+}
+
+.report-table .col-ppn {
+  width: 50px;
+  text-align: center;
+}
+
+.report-table .col-jumlah {
+  width: 120px;
+  text-align: right;
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
   font-weight: 500;
 }
 
-.item-meta {
+.report-table .col-header-group {
+  background: #e5e7eb;
+}
+
+.sumber-dana {
   font-size: 11px;
-  color: #6b7280;
+  color: #4b5563;
   margin-top: 2px;
 }
 
-/* Row styling by level */
-.row-level-1 {
-  background: #1e3a5f;
-  color: white;
+.spesifikasi-detail {
+  font-size: 11px;
+  color: #4b5563;
+  margin-top: 2px;
 }
 
-.row-level-1 .item-name {
-  font-weight: 700;
+/* Row styling by level - matching PDF colors */
+.row-level-1 {
+  background: #fff;
 }
 
 .row-level-1 td {
-  border-color: rgba(255,255,255,0.2);
+  font-weight: 700;
 }
 
 .row-level-2 {
-  background: #2d4a6f;
-  color: white;
-}
-
-.row-level-2 .item-name {
-  font-weight: 600;
+  background: #fff;
 }
 
 .row-level-2 td {
-  border-color: rgba(255,255,255,0.2);
+  font-weight: 600;
 }
 
 .row-level-3 {
-  background: #dbeafe;
+  background: #fff;
 }
 
-.row-level-3 .item-name {
-  font-weight: 600;
-  color: #1e40af;
+.row-level-3 td {
+  font-weight: 500;
 }
 
 .row-level-4 {
-  background: #eff6ff;
-}
-
-.row-level-4 .item-name {
-  font-weight: 500;
-  color: #1d4ed8;
+  background: #fff;
 }
 
 .row-level-5 {
-  background: #f8fafc;
+  background: #fff;
 }
 
-.row-level-5 .item-name {
-  color: #374151;
+.row-detail-code {
+  background: #fff;
 }
 
-.row-detail {
-  background: #ffffff;
+.row-group-hash {
+  background: #f9fafb;
 }
 
-.row-detail .item-name {
-  color: #166534;
+.row-group-dash {
+  background: #f9fafb;
 }
 
-.row-detail:hover {
-  background: #f0fdf4;
+.row-spesifikasi {
+  background: #fff;
 }
 
-.text-success {
-  color: #16a34a;
-  font-weight: 600;
-}
-
-.text-warning {
-  color: #d97706;
-  font-weight: 600;
+.report-table tbody tr:hover {
+  background: #f5f5f5;
 }
 
 .report-table tfoot {
@@ -601,7 +622,8 @@ onMounted(() => {
 }
 
 .report-table tfoot td {
-  padding: 12px;
-  border-top: 2px solid #1e3a5f;
+  padding: 10px;
+  border-top: 2px solid #000;
+  font-weight: 600;
 }
 </style>
