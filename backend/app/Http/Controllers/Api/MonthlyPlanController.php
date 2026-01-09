@@ -87,11 +87,12 @@ class MonthlyPlanController extends Controller
 
     public function update(Request $request, MonthlyPlan $monthlyPlan): JsonResponse
     {
-        // Check if realization exists
-        if ($monthlyPlan->realization()->exists()) {
+        // Check if realization has actual values (allow edit if realization is 0)
+        $realization = $monthlyPlan->realization;
+        if ($realization && ($realization->actual_volume > 0 || $realization->actual_amount > 0)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Tidak dapat mengubah perencanaan yang sudah memiliki realisasi',
+                'message' => 'Tidak dapat mengubah perencanaan yang sudah memiliki realisasi dengan nilai > 0',
             ], 422);
         }
 
@@ -112,10 +113,12 @@ class MonthlyPlanController extends Controller
 
     public function destroy(MonthlyPlan $monthlyPlan): JsonResponse
     {
-        if ($monthlyPlan->realization()->exists()) {
+        // Check if realization has actual values (allow delete if realization is 0)
+        $realization = $monthlyPlan->realization;
+        if ($realization && ($realization->actual_volume > 0 || $realization->actual_amount > 0)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Tidak dapat menghapus perencanaan yang sudah memiliki realisasi',
+                'message' => 'Tidak dapat menghapus perencanaan yang sudah memiliki realisasi dengan nilai > 0',
             ], 422);
         }
 
@@ -171,9 +174,10 @@ class MonthlyPlanController extends Controller
                     ->first();
 
                 if ($existingPlan) {
-                    // Check if has realization
-                    if ($existingPlan->realization()->exists()) {
-                        $errors[] = "Bulan {$planData['month']} sudah memiliki realisasi";
+                    // Check if realization has actual values (allow edit if realization is 0)
+                    $realization = $existingPlan->realization;
+                    if ($realization && ($realization->realized_volume > 0 || $realization->realized_amount > 0)) {
+                        $errors[] = "Bulan {$planData['month']} sudah memiliki realisasi dengan nilai > 0";
                         continue;
                     }
 
