@@ -396,12 +396,41 @@ async function fetchBudgetItems() {
       }
     })
 
-    // Initialize monthly_plans and monthly_realizations for each item if not present
-    const items = response.data.data.map((item: BudgetItem) => ({
-      ...item,
-      monthly_plans: item.monthly_plans || {},
-      monthly_realizations: item.monthly_realizations || {}
-    }))
+    // Initialize monthly_plans and monthly_realizations and convert string values to numbers
+    const items = response.data.data.map((item: BudgetItem) => {
+      const monthlyPlans: Record<number, MonthlyPlanData> = {}
+      const monthlyRealizations: Record<number, RealizationData> = {}
+
+      // Convert string values to numbers (API returns decimal as strings)
+      if (item.monthly_plans) {
+        for (const [monthStr, plan] of Object.entries(item.monthly_plans)) {
+          const month = parseInt(monthStr)
+          monthlyPlans[month] = {
+            id: plan.id,
+            planned_volume: Number(plan.planned_volume) || 0,
+            planned_amount: Number(plan.planned_amount) || 0,
+          }
+        }
+      }
+
+      if (item.monthly_realizations) {
+        for (const [monthStr, real] of Object.entries(item.monthly_realizations)) {
+          const month = parseInt(monthStr)
+          monthlyRealizations[month] = {
+            id: real.id,
+            realized_volume: Number(real.realized_volume) || 0,
+            realized_amount: Number(real.realized_amount) || 0,
+            status: real.status,
+          }
+        }
+      }
+
+      return {
+        ...item,
+        monthly_plans: monthlyPlans,
+        monthly_realizations: monthlyRealizations
+      }
+    })
 
     budgetItems.value = items
     changedItems.value.clear()

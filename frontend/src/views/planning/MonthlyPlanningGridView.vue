@@ -343,11 +343,27 @@ async function fetchBudgetItems() {
       }
     })
 
-    // Initialize monthly_plans for each item if not present
-    const items = response.data.data.map((item: BudgetItem) => ({
-      ...item,
-      monthly_plans: item.monthly_plans || {}
-    }))
+    // Initialize monthly_plans for each item and convert string values to numbers
+    const items = response.data.data.map((item: BudgetItem) => {
+      const monthlyPlans: Record<number, MonthlyPlanData> = {}
+
+      // Convert string values to numbers (API returns decimal as strings)
+      if (item.monthly_plans) {
+        for (const [monthStr, plan] of Object.entries(item.monthly_plans)) {
+          const month = parseInt(monthStr)
+          monthlyPlans[month] = {
+            id: plan.id,
+            planned_volume: Number(plan.planned_volume) || 0,
+            planned_amount: Number(plan.planned_amount) || 0,
+          }
+        }
+      }
+
+      return {
+        ...item,
+        monthly_plans: monthlyPlans
+      }
+    })
 
     budgetItems.value = items
     changedItems.value.clear()
