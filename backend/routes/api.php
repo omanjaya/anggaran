@@ -142,6 +142,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/dpa-pdf/preview', [DpaImportController::class, 'preview']);
         Route::post('/dpa-pdf', [DpaImportController::class, 'import']);
         Route::post('/dpa-pdf/batch', [DpaImportController::class, 'importBatch']);
+        Route::delete('/dpa-pdf/clear-all', [DpaImportController::class, 'clearAll']);
     });
 
     // SKPD Management

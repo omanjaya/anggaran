@@ -5,10 +5,19 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Services\DpaImportService;
 use App\Services\DpaPdfParserService;
+use App\Models\BudgetItem;
+use App\Models\BudgetItemDetail;
+use App\Models\MonthlyPlan;
+use App\Models\ActivityIndicator;
+use App\Models\SubActivity;
+use App\Models\Activity;
+use App\Models\Program;
+use App\Models\AccountCode;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class DpaImportController extends Controller
 {
@@ -151,5 +160,64 @@ class DpaImportController extends Controller
             ],
             'results' => $results,
         ]);
+    }
+
+    /**
+     * Clear all DPA data (for testing purposes)
+     */
+    public function clearAll(): JsonResponse
+    {
+        try {
+            DB::beginTransaction();
+
+            // Delete in correct order (respect foreign keys)
+            $budgetItemDetails = BudgetItemDetail::count();
+            BudgetItemDetail::query()->delete();
+
+            $monthlyPlans = MonthlyPlan::count();
+            MonthlyPlan::query()->delete();
+
+            $activityIndicators = ActivityIndicator::count();
+            ActivityIndicator::query()->delete();
+
+            $budgetItems = BudgetItem::count();
+            BudgetItem::query()->delete();
+
+            $subActivities = SubActivity::count();
+            SubActivity::query()->delete();
+
+            $activities = Activity::count();
+            Activity::query()->delete();
+
+            $programs = Program::count();
+            Program::query()->delete();
+
+            $accountCodes = AccountCode::count();
+            AccountCode::query()->delete();
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Semua data DPA berhasil dihapus',
+                'deleted' => [
+                    'budget_item_details' => $budgetItemDetails,
+                    'monthly_plans' => $monthlyPlans,
+                    'activity_indicators' => $activityIndicators,
+                    'budget_items' => $budgetItems,
+                    'sub_activities' => $subActivities,
+                    'activities' => $activities,
+                    'programs' => $programs,
+                    'account_codes' => $accountCodes,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Clear DPA Error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal menghapus data: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 }
