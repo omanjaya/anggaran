@@ -985,10 +985,9 @@ onUnmounted(() => {
 <style scoped>
 .planning-grid-wrapper {
   overflow-x: auto;
-  overflow-y: auto;
+  overflow-y: visible;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  max-height: 70vh;
   scroll-behavior: smooth;
   /* Shadow indicators for scroll */
   background:
