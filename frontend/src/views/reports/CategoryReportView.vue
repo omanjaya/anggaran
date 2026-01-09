@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, h } from 'vue'
 import { NButton, NSelect, NProgress, NDataTable, NSpace, NIcon } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import { DocumentOutline, DocumentTextOutline } from '@vicons/ionicons5'
@@ -100,7 +100,10 @@ const columns: DataTableColumns<CategoryStat> = [
     key: 'name',
     render: (row) => {
       const color = getCategoryColor(row.code)
-      return `<div class="flex items-center"><div class="w-3 h-3 rounded-full mr-3" style="background-color: ${color}"></div><span class="font-medium">${row.name}</span></div>`
+      return h('div', { class: 'flex items-center' }, [
+        h('div', { class: 'w-3 h-3 rounded-full mr-3', style: { backgroundColor: color } }),
+        h('span', { class: 'font-medium' }, row.name)
+      ])
     },
   },
   {
@@ -122,7 +125,7 @@ const columns: DataTableColumns<CategoryStat> = [
     render: (row) => {
       const remaining = row.budget - row.realization
       const color = remaining >= 0 ? 'text-green-600' : 'text-red-600'
-      return `<span class="${color}">${formatCurrency(remaining)}</span>`
+      return h('span', { class: color }, formatCurrency(remaining))
     },
   },
   {
@@ -132,12 +135,15 @@ const columns: DataTableColumns<CategoryStat> = [
     align: 'right',
     render: (row) => {
       const color = row.percentage >= 80 ? '#22c55e' : row.percentage >= 50 ? '#eab308' : '#ef4444'
-      return `<div class="flex items-center justify-end gap-2">
-        <div class="w-20 h-2 bg-gray-200 rounded-full overflow-hidden">
-          <div class="h-full rounded-full" style="width: ${Math.min(row.percentage, 100)}%; background-color: ${color}"></div>
-        </div>
-        <span class="font-medium">${row.percentage.toFixed(1)}%</span>
-      </div>`
+      return h('div', { class: 'flex items-center justify-end gap-2' }, [
+        h('div', { class: 'w-20 h-2 bg-gray-200 rounded-full overflow-hidden' }, [
+          h('div', {
+            class: 'h-full rounded-full',
+            style: { width: `${Math.min(row.percentage, 100)}%`, backgroundColor: color }
+          })
+        ]),
+        h('span', { class: 'font-medium' }, `${row.percentage.toFixed(1)}%`)
+      ])
     },
   },
 ]

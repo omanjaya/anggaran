@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, h } from 'vue'
 import { NButton, NSelect, NProgress, NDataTable, NSpace, NIcon } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import { DocumentOutline, DocumentTextOutline } from '@vicons/ionicons5'
@@ -119,7 +119,7 @@ const programColumns: DataTableColumns<ProgramStat> = [
     align: 'right',
     render: (row) => {
       const color = row.percentage >= 80 ? 'text-green-600' : row.percentage >= 50 ? 'text-yellow-600' : 'text-red-600'
-      return `<span class="${color}">${row.percentage.toFixed(1)}%</span>`
+      return h('span', { class: color }, `${row.percentage.toFixed(1)}%`)
     },
   },
 ]
