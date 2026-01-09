@@ -185,8 +185,8 @@ class DpaPdfParserService
 
         $textBlock = implode("\n", $this->lines);
 
-        // Sub Kegiatan
-        if (preg_match('/Sub Kegiatan\s*:\s*([\d.]+)\s*-\s*(.+?)(?=\n|Sumber)/is', $textBlock, $matches)) {
+        // Sub Kegiatan - capture text until "Sumber Pendanaan" to handle multi-line names
+        if (preg_match('/Sub Kegiatan\s*:\s*([\d.]+)\s*-\s*(.+?)(?=Sumber Pendanaan)/is', $textBlock, $matches)) {
             $subActivity['code'] = trim($matches[1]);
             $subActivity['name'] = trim(preg_replace('/\s+/', ' ', $matches[2]));
         }
@@ -196,13 +196,13 @@ class DpaPdfParserService
             $subActivity['sumber_pendanaan'] = trim($matches[1]);
         }
 
-        // Lokasi
-        if (preg_match('/Lokasi\s*:\s*(.+?)(?=\n|Keluaran)/is', $textBlock, $matches)) {
-            $subActivity['lokasi'] = trim($matches[1]);
+        // Lokasi - capture until "Keluaran Sub Kegiatan"
+        if (preg_match('/Lokasi\s*:\s*(.+?)(?=Keluaran Sub Kegiatan)/is', $textBlock, $matches)) {
+            $subActivity['lokasi'] = trim(preg_replace('/\s+/', ' ', $matches[1]));
         }
 
-        // Keluaran Sub Kegiatan
-        if (preg_match('/Keluaran Sub Kegiatan\s*:\s*(.+?)(?=\n|Waktu)/is', $textBlock, $matches)) {
+        // Keluaran Sub Kegiatan - capture until "Waktu Pelaksanaan"
+        if (preg_match('/Keluaran Sub Kegiatan\s*:\s*(.+?)(?=Waktu Pelaksanaan)/is', $textBlock, $matches)) {
             $subActivity['keluaran'] = trim(preg_replace('/\s+/', ' ', $matches[1]));
         }
 
