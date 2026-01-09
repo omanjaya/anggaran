@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import {
-  NCard, NSelect, NSpin, NEmpty, NButton, NIcon, NInputNumber, NSpace, NTag
+  NCard, NSelect, NSpin, NEmpty, NButton, NIcon, NInputNumber, NSpace, NTag, NTooltip, NProgress
 } from 'naive-ui'
-import { SaveOutline, RefreshOutline } from '@vicons/ionicons5'
+import { SaveOutline, RefreshOutline, CloseCircle } from '@vicons/ionicons5'
 import { useFormat, useMessage } from '@/composables'
 import api from '@/services/api'
 
@@ -158,6 +158,70 @@ const grandTotal = computed(() => {
   return { budget: totalBudget, planned: totalPlanned }
 })
 
+// Get total planned volume for an item (all months)
+function getTotalPlannedVolume(item: BudgetItem): number {
+  let total = 0
+  for (let m = 1; m <= 12; m++) {
+    const plan = item.monthly_plans?.[m]
+    if (plan) {
+      total += Number(plan.planned_volume) || 0
+    }
+  }
+  return total
+}
+
+// Get planned volume up to (but not including) a specific month
+function getPlannedVolumeBeforeMonth(item: BudgetItem, month: number): number {
+  let total = 0
+  for (let m = 1; m < month; m++) {
+    const plan = item.monthly_plans?.[m]
+    if (plan) {
+      total += Number(plan.planned_volume) || 0
+    }
+  }
+  return total
+}
+
+// Get remaining volume for an item
+function getRemainingVolume(item: BudgetItem): number {
+  const dpaVolume = Number(item.volume) || 0
+  const plannedVolume = getTotalPlannedVolume(item)
+  return Math.max(0, dpaVolume - plannedVolume)
+}
+
+// Check if volume input should be disabled for a month
+function isVolumeExhausted(item: BudgetItem, month: number): boolean {
+  const dpaVolume = Number(item.volume) || 0
+  const plannedBefore = getPlannedVolumeBeforeMonth(item, month)
+  const currentValue = item.monthly_plans?.[month]?.planned_volume || 0
+
+  // Disabled if all volume is used up in previous months (and current month has no value)
+  return plannedBefore >= dpaVolume && currentValue === 0
+}
+
+// Get max volume that can be input for a specific month
+function getMaxVolumeForMonth(item: BudgetItem, month: number): number {
+  const dpaVolume = Number(item.volume) || 0
+  const plannedBefore = getPlannedVolumeBeforeMonth(item, month)
+  return Math.max(0, dpaVolume - plannedBefore)
+}
+
+// Get volume usage percentage
+function getVolumeUsagePercent(item: BudgetItem): number {
+  const dpaVolume = Number(item.volume) || 0
+  if (dpaVolume === 0) return 0
+  const planned = getTotalPlannedVolume(item)
+  return Math.min(100, (planned / dpaVolume) * 100)
+}
+
+// Get status color based on usage
+function getUsageStatus(item: BudgetItem): 'success' | 'warning' | 'error' {
+  const percent = getVolumeUsagePercent(item)
+  if (percent >= 100) return 'error'
+  if (percent >= 80) return 'warning'
+  return 'success'
+}
+
 async function fetchSubActivities() {
   try {
     const response = await api.get('/sub-activities')
@@ -214,7 +278,15 @@ function onVolumeChange(item: BudgetItem, month: number, volume: number | null) 
     item.monthly_plans[month] = { planned_volume: 0, planned_amount: 0 }
   }
 
-  const newVolume = volume || 0
+  // Validate against max allowed volume
+  const maxVolume = getMaxVolumeForMonth(item, month)
+  let newVolume = volume || 0
+
+  if (newVolume > maxVolume) {
+    newVolume = maxVolume
+    message.warning(`Volume maksimal untuk bulan ini adalah ${maxVolume.toFixed(2)}`)
+  }
+
   item.monthly_plans[month].planned_volume = newVolume
   item.monthly_plans[month].planned_amount = newVolume * Number(item.unit_price)
 
@@ -230,11 +302,23 @@ function onAmountChange(item: BudgetItem, month: number, amount: number | null) 
     item.monthly_plans[month] = { planned_volume: 0, planned_amount: 0 }
   }
 
-  item.monthly_plans[month].planned_amount = amount || 0
-
-  // Recalculate volume from amount
+  // Calculate volume from amount
+  let newVolume = 0
   if (item.unit_price > 0) {
-    item.monthly_plans[month].planned_volume = (amount || 0) / Number(item.unit_price)
+    newVolume = (amount || 0) / Number(item.unit_price)
+  }
+
+  // Validate against max allowed volume
+  const maxVolume = getMaxVolumeForMonth(item, month)
+  if (newVolume > maxVolume) {
+    newVolume = maxVolume
+    const maxAmount = maxVolume * Number(item.unit_price)
+    message.warning(`Jumlah maksimal untuk bulan ini adalah ${formatCurrency(maxAmount)}`)
+    item.monthly_plans[month].planned_amount = maxAmount
+    item.monthly_plans[month].planned_volume = newVolume
+  } else {
+    item.monthly_plans[month].planned_amount = amount || 0
+    item.monthly_plans[month].planned_volume = newVolume
   }
 
   changedItems.value.add(item.id)
@@ -416,7 +500,7 @@ onMounted(() => {
             <tr>
               <th rowspan="3" class="col-code sticky-col sticky-left-0">Kode Rekening</th>
               <th rowspan="3" class="col-uraian sticky-col sticky-left-1">Uraian</th>
-              <th colspan="4" rowspan="2" class="col-header-group">Rincian Perhitungan</th>
+              <th colspan="5" rowspan="2" class="col-header-group">Rincian Perhitungan</th>
               <!-- January - only 2 columns (no YTD) -->
               <th colspan="2" class="col-month-header col-month-jan">Januari</th>
               <!-- February onwards - 4 columns each (with YTD) -->
@@ -440,6 +524,7 @@ onMounted(() => {
               <th class="col-satuan">Satuan</th>
               <th class="col-harga">Harga</th>
               <th class="col-jumlah">Jumlah</th>
+              <th class="col-sisa">Sisa Vol</th>
               <!-- January columns -->
               <th class="col-input col-month-jan">Vol</th>
               <th class="col-input col-month-jan">Jumlah</th>
@@ -463,12 +548,49 @@ onMounted(() => {
               <td class="col-satuan">{{ item.unit }}</td>
               <td class="col-harga">{{ formatCurrency(item.unit_price) }}</td>
               <td class="col-jumlah">{{ formatCurrency(item.total_budget) }}</td>
+              <!-- Remaining Volume Column with Progress -->
+              <td class="col-sisa">
+                <NTooltip>
+                  <template #trigger>
+                    <div class="sisa-volume">
+                      <div class="sisa-value" :class="getUsageStatus(item)">
+                        {{ getRemainingVolume(item).toFixed(2) }}
+                      </div>
+                      <NProgress
+                        type="line"
+                        :percentage="getVolumeUsagePercent(item)"
+                        :status="getUsageStatus(item)"
+                        :show-indicator="false"
+                        :height="4"
+                      />
+                    </div>
+                  </template>
+                  <div class="text-xs">
+                    <div>Volume DPA: {{ item.volume }} {{ item.unit }}</div>
+                    <div>Terpakai: {{ getTotalPlannedVolume(item).toFixed(2) }} {{ item.unit }}</div>
+                    <div>Sisa: {{ getRemainingVolume(item).toFixed(2) }} {{ item.unit }}</div>
+                    <div class="mt-1 font-medium">
+                      {{ getVolumeUsagePercent(item).toFixed(1) }}% terpakai
+                    </div>
+                  </div>
+                </NTooltip>
+              </td>
 
               <!-- January - Input only (no YTD) -->
-              <td class="col-input col-month-jan">
+              <td class="col-input col-month-jan" :class="{ 'col-disabled': isVolumeExhausted(item, 1) }">
+                <NTooltip v-if="isVolumeExhausted(item, 1)" placement="top">
+                  <template #trigger>
+                    <div class="disabled-cell">
+                      <NIcon color="#dc2626"><CloseCircle /></NIcon>
+                    </div>
+                  </template>
+                  <span>Volume sudah habis</span>
+                </NTooltip>
                 <NInputNumber
+                  v-else
                   :value="getMonthPlan(item, 1).planned_volume || null"
                   :min="0"
+                  :max="getMaxVolumeForMonth(item, 1)"
                   :precision="2"
                   size="small"
                   placeholder="0"
@@ -476,8 +598,15 @@ onMounted(() => {
                   @update:value="(v) => onVolumeChange(item, 1, v)"
                 />
               </td>
-              <td class="col-input col-month-jan">
+              <td class="col-input col-month-jan" :class="{ 'col-disabled': isVolumeExhausted(item, 1) }">
+                <NTooltip v-if="isVolumeExhausted(item, 1)" placement="top">
+                  <template #trigger>
+                    <div class="disabled-cell">-</div>
+                  </template>
+                  <span>Volume sudah habis</span>
+                </NTooltip>
                 <NInputNumber
+                  v-else
                   :value="getMonthPlan(item, 1).planned_amount || null"
                   :min="0"
                   size="small"
@@ -490,10 +619,20 @@ onMounted(() => {
               <!-- February onwards - Input + YTD -->
               <template v-for="month in months.slice(1)" :key="`data-${item.id}-${month.value}`">
                 <!-- Current month input -->
-                <td class="col-input">
+                <td class="col-input" :class="{ 'col-disabled': isVolumeExhausted(item, month.value) }">
+                  <NTooltip v-if="isVolumeExhausted(item, month.value)" placement="top">
+                    <template #trigger>
+                      <div class="disabled-cell">
+                        <NIcon color="#dc2626"><CloseCircle /></NIcon>
+                      </div>
+                    </template>
+                    <span>Volume sudah habis di bulan sebelumnya</span>
+                  </NTooltip>
                   <NInputNumber
+                    v-else
                     :value="getMonthPlan(item, month.value).planned_volume || null"
                     :min="0"
+                    :max="getMaxVolumeForMonth(item, month.value)"
                     :precision="2"
                     size="small"
                     placeholder="0"
@@ -501,8 +640,15 @@ onMounted(() => {
                     @update:value="(v) => onVolumeChange(item, month.value, v)"
                   />
                 </td>
-                <td class="col-input">
+                <td class="col-input" :class="{ 'col-disabled': isVolumeExhausted(item, month.value) }">
+                  <NTooltip v-if="isVolumeExhausted(item, month.value)" placement="top">
+                    <template #trigger>
+                      <div class="disabled-cell">-</div>
+                    </template>
+                    <span>Volume sudah habis di bulan sebelumnya</span>
+                  </NTooltip>
                   <NInputNumber
+                    v-else
                     :value="getMonthPlan(item, month.value).planned_amount || null"
                     :min="0"
                     size="small"
@@ -524,7 +670,7 @@ onMounted(() => {
           <tfoot>
             <tr class="total-row">
               <td colspan="2" class="sticky-col sticky-left-0 text-right font-bold">TOTAL</td>
-              <td colspan="4" class="col-jumlah font-bold">{{ formatCurrency(grandTotal.budget) }}</td>
+              <td colspan="5" class="col-jumlah font-bold">{{ formatCurrency(grandTotal.budget) }}</td>
               <!-- January totals -->
               <td class="col-input col-month-jan font-medium">{{ (monthlyTotals[1]?.volume || 0).toFixed(2) }}</td>
               <td class="col-input col-month-jan font-medium">{{ formatCurrency(monthlyTotals[1]?.amount || 0) }}</td>
@@ -640,6 +786,34 @@ onMounted(() => {
   font-size: 10px;
 }
 
+.planning-grid .col-sisa {
+  width: 70px;
+  text-align: center;
+}
+
+.sisa-volume {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sisa-value {
+  font-weight: 600;
+  font-size: 10px;
+}
+
+.sisa-value.success {
+  color: #16a34a;
+}
+
+.sisa-value.warning {
+  color: #d97706;
+}
+
+.sisa-value.error {
+  color: #dc2626;
+}
+
 .planning-grid .col-header-group {
   background: #2d4a6f;
 }
@@ -677,6 +851,18 @@ onMounted(() => {
 .planning-grid .col-readonly {
   background: #f3f4f6;
   font-family: 'Courier New', monospace;
+}
+
+.planning-grid .col-disabled {
+  background: #fee2e2 !important;
+}
+
+.disabled-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #dc2626;
+  font-size: 10px;
 }
 
 .planning-grid .col-input :deep(.n-input-number) {
