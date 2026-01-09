@@ -78,7 +78,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'realization/monthly',
         name: 'monthly-realization',
-        component: () => import('@/views/realization/MonthlyRealizationView.vue'),
+        component: () => import('@/views/realization/MonthlyRealizationGridView.vue'),
         meta: { permission: 'realization.view' },
       },
       {

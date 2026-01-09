@@ -32,32 +32,52 @@ class BudgetItemController extends Controller
 
         // Include monthly plans if requested
         $withMonthlyPlans = $request->boolean('with_monthly_plans');
+        $withRealizations = $request->boolean('with_realizations');
         $year = $request->get('year', date('Y'));
 
-        if ($withMonthlyPlans) {
-            $query->with(['monthlyPlans' => function ($q) use ($year) {
+        if ($withMonthlyPlans || $withRealizations) {
+            $query->with(['monthlyPlans' => function ($q) use ($year, $withRealizations) {
                 $q->where('year', $year);
+                if ($withRealizations) {
+                    $q->with('realization');
+                }
             }]);
         }
 
         $budgetItems = $query->orderBy('code')
             ->paginate($request->get('per_page', 15));
 
-        // Transform data to include monthly_plans indexed by month
-        $items = collect($budgetItems->items())->map(function ($item) use ($withMonthlyPlans) {
+        // Transform data to include monthly_plans and monthly_realizations indexed by month
+        $items = collect($budgetItems->items())->map(function ($item) use ($withMonthlyPlans, $withRealizations) {
             $itemArray = $item->toArray();
 
-            if ($withMonthlyPlans && isset($itemArray['monthly_plans'])) {
+            if (($withMonthlyPlans || $withRealizations) && isset($itemArray['monthly_plans'])) {
                 // Index monthly plans by month number for easy access
                 $monthlyPlansIndexed = [];
+                $monthlyRealizationsIndexed = [];
+
                 foreach ($itemArray['monthly_plans'] as $plan) {
                     $monthlyPlansIndexed[$plan['month']] = [
                         'id' => $plan['id'],
                         'planned_volume' => $plan['planned_volume'],
                         'planned_amount' => $plan['planned_amount'],
                     ];
+
+                    // Extract realizations if available
+                    if ($withRealizations && isset($plan['realization']) && $plan['realization']) {
+                        $monthlyRealizationsIndexed[$plan['month']] = [
+                            'id' => $plan['realization']['id'],
+                            'realized_volume' => $plan['realization']['realized_volume'],
+                            'realized_amount' => $plan['realization']['realized_amount'],
+                            'status' => $plan['realization']['status'],
+                        ];
+                    }
                 }
+
                 $itemArray['monthly_plans'] = $monthlyPlansIndexed;
+                if ($withRealizations) {
+                    $itemArray['monthly_realizations'] = $monthlyRealizationsIndexed;
+                }
             }
 
             return $itemArray;

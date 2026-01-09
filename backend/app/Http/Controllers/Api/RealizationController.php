@@ -401,6 +401,85 @@ class RealizationController extends Controller
         ]);
     }
 
+    /**
+     * Batch create/update realizations
+     */
+    public function batch(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'realizations' => 'required|array|min:1',
+            'realizations.*.monthly_plan_id' => 'required|exists:monthly_plans,id',
+            'realizations.*.realized_volume' => 'required|numeric|min:0',
+            'realizations.*.realized_amount' => 'required|numeric|min:0',
+            'realizations.*.id' => 'nullable|integer|exists:monthly_realizations,id',
+        ]);
+
+        $savedCount = 0;
+        $errors = [];
+
+        foreach ($validated['realizations'] as $realData) {
+            try {
+                $plan = MonthlyPlan::find($realData['monthly_plan_id']);
+                if (!$plan) {
+                    $errors[] = "Plan ID {$realData['monthly_plan_id']} tidak ditemukan";
+                    continue;
+                }
+
+                // Calculate deviations
+                $deviationVolume = $realData['realized_volume'] - $plan->planned_volume;
+                $deviationAmount = $realData['realized_amount'] - $plan->planned_amount;
+                $deviationPercentage = $plan->planned_amount > 0
+                    ? (($realData['realized_amount'] - $plan->planned_amount) / $plan->planned_amount) * 100
+                    : 0;
+
+                // Check if realization exists for this plan
+                $existingRealization = MonthlyRealization::where('monthly_plan_id', $realData['monthly_plan_id'])->first();
+
+                if ($existingRealization) {
+                    // Check if locked or in non-editable status
+                    if ($existingRealization->isLocked()) {
+                        $errors[] = "Realisasi bulan {$plan->month} sudah dikunci";
+                        continue;
+                    }
+
+                    if (!in_array($existingRealization->status->value ?? $existingRealization->status, ['DRAFT', 'REJECTED'])) {
+                        $errors[] = "Realisasi bulan {$plan->month} sudah diajukan/diverifikasi";
+                        continue;
+                    }
+
+                    $existingRealization->update([
+                        'realized_volume' => $realData['realized_volume'],
+                        'realized_amount' => $realData['realized_amount'],
+                        'deviation_volume' => $deviationVolume,
+                        'deviation_amount' => $deviationAmount,
+                        'deviation_percentage' => $deviationPercentage,
+                    ]);
+                } else {
+                    MonthlyRealization::create([
+                        'monthly_plan_id' => $realData['monthly_plan_id'],
+                        'realized_volume' => $realData['realized_volume'],
+                        'realized_amount' => $realData['realized_amount'],
+                        'deviation_volume' => $deviationVolume,
+                        'deviation_amount' => $deviationAmount,
+                        'deviation_percentage' => $deviationPercentage,
+                        'status' => ApprovalStatus::DRAFT,
+                    ]);
+                }
+
+                $savedCount++;
+            } catch (\Exception $e) {
+                $errors[] = "Error pada plan {$realData['monthly_plan_id']}: " . $e->getMessage();
+            }
+        }
+
+        return response()->json([
+            'success' => count($errors) === 0,
+            'message' => "{$savedCount} realisasi berhasil disimpan",
+            'saved_count' => $savedCount,
+            'errors' => $errors,
+        ]);
+    }
+
     public function pendingVerification(Request $request): JsonResponse
     {
         $realizations = MonthlyRealization::with(['monthlyPlan.budgetItem.subActivity.activity.program', 'submittedBy'])

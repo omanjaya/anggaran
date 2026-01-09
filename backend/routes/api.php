@@ -80,6 +80,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Realizations
     Route::get('/realizations/pending-verification', [RealizationController::class, 'pendingVerification']);
     Route::get('/realizations/pending-approval', [RealizationController::class, 'pendingApproval']);
+    Route::post('/realizations/batch', [RealizationController::class, 'batch']);
     Route::post('/realizations/batch-verify', [RealizationController::class, 'batchVerify']);
     Route::post('/realizations/batch-approve', [RealizationController::class, 'batchApprove']);
     Route::post('/realizations/{realization}/submit', [RealizationController::class, 'submit']);
